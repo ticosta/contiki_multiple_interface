@@ -1,0 +1,4 @@
+er-http_src = er-http.c httpd.c
+
+# Erbium will implement the REST Engine
+#CFLAGS += -DREST=http_rest_implementation

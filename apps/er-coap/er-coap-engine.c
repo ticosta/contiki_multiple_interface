@@ -134,6 +134,8 @@ coap_receive(void)
           if(service_cbk) {
 
             /* call REST framework and check if found and allowed */
+        	// Select our interface
+        	rest_select_if(COAP_IF);
             if(service_cbk
                  (message, response, transaction->packet + COAP_MAX_HEADER_SIZE,
                  block_size, &new_offset)) {

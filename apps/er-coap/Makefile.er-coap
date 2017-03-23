@@ -3,4 +3,4 @@ er-coap_src = er-coap.c er-coap-engine.c er-coap-transactions.c      \
   er-coap-block1.c er-coap-observe-client.c
 
 # Erbium will implement the REST Engine
-CFLAGS += -DREST=coap_rest_implementation
+#CFLAGS += -DREST=coap_rest_implementation

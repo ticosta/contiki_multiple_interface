@@ -43,7 +43,6 @@
 #include "contiki-net.h"
 #include "rest-engine.h"
 #include "slip.h"
-#include "httpd-simple.h"
 
 
 
@@ -59,6 +58,8 @@
 
 static uint8_t prefix_set;
 static uip_ipaddr_t prefix;
+
+
 
 /*
  * Resources to be activated need to be imported through the extern keyword.
@@ -153,13 +154,6 @@ PROCESS_THREAD(er_example_server, ev, data)
 /*  rest_activate_resource(&res_event, "sensors/button"); */
 /*  rest_activate_resource(&res_sub, "test/sub"); */
 /*  rest_activate_resource(&res_b1_sep_b2, "test/b1sepb2"); */
-
-
-
-
-  /*****************************  HTTP  *********************************/
-  process_start(&httpd_simple_process, NULL);
-  /**********************************************************************/
 
   /* Define application-specific events here. */
   while(1) {

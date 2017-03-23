@@ -50,8 +50,7 @@
 #error "UIP_CONF_BUFFER_SIZE too small for REST_MAX_CHUNK_SIZE"
 #endif
 
-/* use Erbium CoAP for the REST Engine. Must come before include of rest-engine.h. */
-#define REST coap_rest_implementation
+/* use Erbium CoAP for the REST Engine*/
 #include "rest-engine.h"
 
 /* REST_MAX_CHUNK_SIZE can be different from 2^x so we need to get next lower 2^x for COAP_MAX_BLOCK_SIZE */

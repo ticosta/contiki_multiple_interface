@@ -42,6 +42,18 @@
 #include "contiki.h"
 #include "rest-engine.h"
 
+
+struct rest_implementation *_rest_interface[2];
+int rest_engine_if_selector = 0;
+
+struct ttt {
+	int a;
+	int b;
+};
+
+struct ttt testet[2];
+
+
 #define DEBUG 0
 #if DEBUG
 #include <stdio.h>
@@ -81,8 +93,17 @@ rest_init_engine(void)
 
   list_init(restful_services);
 
+  // CoAP Interface
+  rest_select_if(COAP_IF);
+  _rest_interface[COAP_IF] = &coap_rest_implementation;
   REST.set_service_callback(rest_invoke_restful_service);
+  /* Start the RESTful server implementation. */
+  REST.init();
 
+  // HTTP Interface
+  rest_select_if(HTTP_IF);
+  _rest_interface[HTTP_IF] = &http_rest_implementation;
+  REST.set_service_callback(rest_invoke_restful_service);
   /* Start the RESTful server implementation. */
   REST.init();
 

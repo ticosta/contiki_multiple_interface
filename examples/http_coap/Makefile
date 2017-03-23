@@ -1,9 +1,9 @@
-all: er-example-server er-example-client
+all: er-example-server
 # use target "er-plugtest-server" explicitly when requried 
 
 CONTIKI=../..
 CFLAGS += -DPROJECT_CONF_H=\"project-conf.h\"
-PROJECT_SOURCEFILES += httpd-simple.c slip-bridge.c
+PROJECT_SOURCEFILES += slip-bridge.c
 # automatically build RESTful resources
 REST_RESOURCES_DIR = ./resources
 ifndef TARGET
@@ -23,7 +23,7 @@ PROJECT_SOURCEFILES += $(REST_RESOURCES_FILES)
 SMALL=1
 
 # REST Engine shall use Erbium CoAP implementation
-APPS += er-coap
+APPS += er-coap er-http
 APPS += rest-engine
 
 # optional rules to get assembly

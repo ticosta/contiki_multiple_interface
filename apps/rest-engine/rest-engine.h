@@ -46,13 +46,13 @@
 #include "rest-constants.h"
 
 /* list of valid REST Enigne implementations */
-#define REGISTERED_ENGINE_ERBIUM coap_rest_implementation
-#define REGISTERED_ENGINE_HELIUM http_rest_implementation
-
+/*#define REGISTERED_ENGINE_ERBIUM coap_rest_implementation
+#define REGISTERED_ENGINE_HELIUM http_rest_implementation*/
+// TODO
 /* sanity check for configured implementation */
-#if !defined(REST) || (REST != REGISTERED_ENGINE_ERBIUM && REST != REGISTERED_ENGINE_HELIUM)
+/*#if !defined(REST) || (REST != REGISTERED_ENGINE_ERBIUM && REST != REGISTERED_ENGINE_HELIUM)
 #error "Define a valid REST Engine implementation (REST define)!"
-#endif
+#endif*/
 
 /*
  * The maximum buffer size that is provided for resource responses and must be respected due to the limited IP buffer.
@@ -222,9 +222,6 @@ struct rest_implementation {
   const struct rest_implementation_type type;
 };
 
-/* instance of REST implementation */
-extern const struct rest_implementation REST;
-
 /*
  * To be called by HTTP/COAP server as a callback function when a new service request appears.
  * This function dispatches the corresponding RESTful service.
@@ -254,5 +251,29 @@ void rest_activate_resource(resource_t *resource, char *path);
  */
 list_t rest_get_resources(void);
 /*---------------------------------------------------------------------------*/
+
+
+
+extern const struct rest_implementation coap_rest_implementation;
+extern const struct rest_implementation http_rest_implementation;
+
+/* CoAP rest interface implementation index */
+#define COAP_IF												0
+/* CoAP rest interface implementation index */
+#define HTTP_IF												1
+
+extern struct rest_implementation *_rest_interface[2];
+extern int rest_engine_if_selector;
+
+
+//#ifndef REST
+#define REST												(*_rest_interface[rest_engine_if_selector])
+//#endif /* REST */
+
+#define rest_select_if(interface)							(rest_engine_if_selector = interface)
+
+
+
+
 
 #endif /*REST_ENGINE_H_ */
