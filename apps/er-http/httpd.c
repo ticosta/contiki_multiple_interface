@@ -183,55 +183,17 @@ static const char http_content_type_plain[] = "text/plain";
 /*---------------------------------------------------------------------------*/
 static char generate_index(struct httpd_state *s);
 /*---------------------------------------------------------------------------*/
-typedef struct page {
-  struct page *next;
-  char *filename;
-  char *title;
-  char (*script)(struct httpd_state *s);
-} page_t;
-
 static page_t http_index_page = {
   NULL,
   "index.html",
   "Index",
   generate_index,
 };
-
 /*---------------------------------------------------------------------------*/
 static uint16_t numtimes;
 static const httpd_simple_post_handler_t *handler;
 /*---------------------------------------------------------------------------*/
 
-/*---------------------------------------------------------------------------*/
-struct httpd_state;
-typedef char (*httpd_simple_script_t)(struct httpd_state *s);
-
-struct httpd_state {
-  char buf[HTTPD_SIMPLE_MAIN_BUF_SIZE];
-  char tmp_buf[TMP_BUF_SIZE];
-  struct timer timer;
-  struct psock sin, sout;
-  int blen;
-  const char **ptr;
-  //const cc26xx_web_demo_sensor_reading_t *reading;
-  const int *reading; //#############################################################
-  const page_t *page;
-  uip_ds6_route_t *r;
-  uip_ds6_nbr_t *nbr;
-  httpd_simple_script_t script;
-  int content_length;
-  int tmp_buf_len;
-  int tmp_buf_copied;
-  char filename[HTTPD_PATHLEN];
-  char inputbuf[HTTPD_INBUF_LEN];
-  struct pt outputpt;
-  struct pt generate_pt;
-  struct pt top_matter_pt;
-  char state;
-  char request_type;
-  char return_code;
-};
-/*---------------------------------------------------------------------------*/
 LIST(post_handlers);
 LIST(pages_list);
 MEMB(conns, struct httpd_state, CONNS);
@@ -315,6 +277,9 @@ PT_THREAD(enqueue_chunk(struct httpd_state *s, uint8_t immediate,
   s->tmp_buf_len = vsnprintf(s->tmp_buf, TMP_BUF_SIZE, format, ap);
 
   va_end(ap);
+
+  printf("********************* Enqueue Chunk blen: %d\n", s->blen);
+  printf("********************* Enqueue Chunk tmp_buf_len: %d\n", s->tmp_buf_len);
 
   if(s->blen + s->tmp_buf_len < HTTPD_SIMPLE_MAIN_BUF_SIZE) {
     /* Enough space for the entire chunk. Copy over */
@@ -601,8 +566,6 @@ get_script(const char *name)
 static
 PT_THREAD(send_string(struct httpd_state *s, const char *str))
 {
-	//printf("* PT_THREAD.send_string - send_string! **********************************\n");
-
   PSOCK_BEGIN(&s->sout);
 
   SEND_STRING(&s->sout, str);
@@ -615,8 +578,6 @@ PT_THREAD(send_headers(struct httpd_state *s, const char *statushdr,
                        const char *content_type, const char *redir,
                        const char **additional))
 {
-	//printf("* PT_THREAD.send_headers - headers! *****************************\n");
-
   PT_BEGIN(&s->generate_pt);
 
   PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, statushdr));
@@ -645,10 +606,8 @@ PT_THREAD(send_headers(struct httpd_state *s, const char *statushdr,
 }
 /*---------------------------------------------------------------------------*/
 static
-PT_THREAD(handle_output(struct httpd_state *s))
+PT_THREAD(handle_output(struct httpd_state *s, int resourse_found))
 {
-	//printf("* PT_THREAD.handle_output - output! **********************************\n");
-
   PT_BEGIN(&s->outputpt);
 
   s->script = NULL;
@@ -688,23 +647,36 @@ PT_THREAD(handle_output(struct httpd_state *s))
       PT_WAIT_THREAD(&s->outputpt, send_string(s, "Bad Request\n"));
     }
   } else if(s->request_type == REQUEST_TYPE_GET) {
-    s->script = get_script(&s->filename[1]);
-    if(s->script == NULL) {
-      strncpy(s->filename, "/notfound.html", sizeof(s->filename));
-      PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_404,
-                                                http_content_type_html,
-                                                NULL,
-                                                http_header_con_close));
-      PT_WAIT_THREAD(&s->outputpt,
-                     send_string(s, NOT_FOUND));
-      uip_close();
-      PT_EXIT(&s->outputpt);
-    } else {
-      PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_200,
-                                                http_content_type_html,
-                                                NULL,
-                                                http_header_con_close));
-      PT_WAIT_THREAD(&s->outputpt, s->script(s));
+	  printf("***** GET\n");
+	  s->script = get_script(&s->filename[1]);
+
+	  // File not found
+    if(s->script != NULL) {
+        PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_200,
+                                                  http_content_type_html,
+                                                  NULL,
+                                                  http_header_con_close));
+        PT_WAIT_THREAD(&s->outputpt, s->script(s));
+    } else if(resourse_found) {
+    	printf("***** Resourse Found!\n");
+    	// TODO: passar a utilizar o content-type que está no "s"
+        PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_200,
+                                                  http_content_type_html,
+                                                  NULL,
+                                                  http_header_con_close));
+        PT_WAIT_THREAD(&s->outputpt,
+                       enqueue_chunk(s, 1, s->response.buf));
+
+    }else {
+		strncpy(s->filename, "/notfound.html", sizeof(s->filename));
+		PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_404,
+												http_content_type_html,
+												NULL,
+												http_header_con_close));
+		PT_WAIT_THREAD(&s->outputpt,
+					 send_string(s, NOT_FOUND));
+		uip_close();
+		PT_EXIT(&s->outputpt);
     }
   }
   s->script = NULL;
@@ -727,15 +699,16 @@ PT_THREAD(handle_input(struct httpd_state *s))
       PSOCK_CLOSE_EXIT(&s->sin);
     }
 
+    // copy uri
+    s->uri_len = PSOCK_DATALEN(&s->sin) - 1; // we remove the space at the end
+    memcpy(&s->uri, &s->inputbuf, s->uri_len);
+
     if(s->inputbuf[1] == ISO_space) {
       strncpy(s->filename, http_index_html, sizeof(s->filename));
-      // TODO: não faço ideia se são estes os valores...
-      /////////////////service_cbk(s, s->buf, s->tmp_buf, sizeof(s->tmp_buf), 49);
     } else {
+    	// TODO: filename load need to be improved
       s->inputbuf[PSOCK_DATALEN(&s->sin) - 1] = 0;
       strncpy(s->filename, s->inputbuf, sizeof(s->filename));
-      // TODO: não faço ideia se são estes os valores...
-      ///////////////service_cbk(s, s->buf, s->tmp_buf, sizeof(s->tmp_buf), 49);
     }
   } else if(strncasecmp(s->inputbuf, http_post, 5) == 0) {
     s->request_type = REQUEST_TYPE_POST;
@@ -837,7 +810,17 @@ handle_connection(struct httpd_state *s)
 {
   handle_input(s);
   if(s->state == STATE_OUTPUT) {
-    handle_output(s);
+	rest_select_if(HTTP_IF);
+	int res_found = service_cbk(s, &s->response, s->response.buf, 0, 0);
+//	printf("\n||||||||||||||||||||||||||||||||||||||||||||||||||||||| Resource Found: %d\n", res_found);
+//	printf("||||||||||||||||||||||||||||||||||||||||||||||||||||||| LEN: %d\n", s->response.blen);
+//	int i;
+//	for(i = 0; i < s->response.blen; i++) {
+//		printf("%c", s->response.buf[i]);
+//	}
+//	printf("\n|||||||||||||||||||||||||||||||||||||||||||||||||||||||\n\n");
+
+	handle_output(s, res_found);
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -851,6 +834,7 @@ appcall(void *state)
       s->script = NULL;
       s->blen = 0;
       s->tmp_buf_len = 0;
+      s->response.blen = 0;
       memb_free(&conns, s);
     }
   } else if(uip_connected()) {

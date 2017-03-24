@@ -73,7 +73,8 @@ extern resource_t
   res_push,
   res_event,
   res_sub,
-  res_b1_sep_b2;
+  res_b1_sep_b2,
+  res_http_index;
 
 static void
 print_local_addresses(void)
@@ -154,6 +155,8 @@ PROCESS_THREAD(er_example_server, ev, data)
 /*  rest_activate_resource(&res_event, "sensors/button"); */
 /*  rest_activate_resource(&res_sub, "test/sub"); */
 /*  rest_activate_resource(&res_b1_sep_b2, "test/b1sepb2"); */
+
+  rest_activate_resource(&res_http_index, "/index");
 
   /* Define application-specific events here. */
   while(1) {

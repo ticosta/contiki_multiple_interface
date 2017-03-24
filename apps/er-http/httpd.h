@@ -62,6 +62,9 @@
 #define HTTPD_SIMPLE_POST_HANDLER_OK      1
 #define HTTPD_SIMPLE_POST_HANDLER_UNKNOWN 0
 #define HTTPD_SIMPLE_POST_HANDLER_ERROR   0xFFFFFFFF
+/*---------------------------------------------------------------------------*/
+//
+#define MAX_URI_LEN	50
 
 /**
  * \brief Datatype for a handler which can process incoming POST requests
@@ -83,6 +86,59 @@ typedef struct httpd_simple_post_handler {
 /* Declare a handler */
 #define HTTPD_SIMPLE_POST_HANDLER(name, fp) \
   httpd_simple_post_handler_t name##_handler = { NULL, fp }
+
+
+/*---------------------------------------------------------------------------*/
+struct httpd_state;
+typedef char (*httpd_simple_script_t)(struct httpd_state *s);
+
+typedef struct page {
+  struct page *next;
+  char *filename;
+  char *title;
+  char (*script)(struct httpd_state *s);
+} page_t;
+
+typedef struct http_response_t {
+	char buf[HTTPD_SIMPLE_MAIN_BUF_SIZE];
+	int blen;
+	uint16_t content_type;
+} http_response;
+
+/*---------------------------------------------------------------------------*/
+/* http request struct */
+struct httpd_state {
+  char buf[HTTPD_SIMPLE_MAIN_BUF_SIZE];
+  char tmp_buf[TMP_BUF_SIZE];
+  struct timer timer;
+  struct psock sin, sout;
+  int blen;
+  const char **ptr;
+  //const cc26xx_web_demo_sensor_reading_t *reading;
+  const int *reading; // pagar?
+  const page_t *page;
+  uip_ds6_route_t *r; // apagar?
+  uip_ds6_nbr_t *nbr; // apagar?
+  httpd_simple_script_t script;
+  int content_length;
+  // uri
+  size_t uri_len;
+  char uri[MAX_URI_LEN];
+  //
+  int tmp_buf_len;
+  int tmp_buf_copied;
+  char filename[HTTPD_PATHLEN];
+  char inputbuf[HTTPD_INBUF_LEN];
+  struct pt outputpt;
+  struct pt generate_pt; // apagar?
+  struct pt top_matter_pt; // apagar?
+  char state;
+  char request_type;
+  char return_code;
+  // response
+  http_response response;
+};
+/*---------------------------------------------------------------------------*/
 
 /**
  * \brief Register a handler for POST requests

@@ -54,7 +54,7 @@ struct ttt {
 struct ttt testet[2];
 
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #include <stdio.h>
 #define PRINTF(...) printf(__VA_ARGS__)
@@ -165,17 +165,20 @@ rest_invoke_restful_service(void *request, void *response, uint8_t *buffer,
   int url_len, res_url_len;
 
   url_len = REST.get_url(request, &url);
+
   for(resource = (resource_t *)list_head(restful_services);
       resource; resource = resource->next) {
 
     /* if the web service handles that kind of requests and urls matches */
     res_url_len = strlen(resource->url);
+
     if((url_len == res_url_len
         || (url_len > res_url_len
             && (resource->flags & HAS_SUB_RESOURCES)
             && url[res_url_len] == '/'))
        && strncmp(resource->url, url, res_url_len) == 0) {
       found = 1;
+
       rest_resource_flags_t method = REST.get_method_type(request);
 
       PRINTF("/%s, method %u, resource->flags %u\n", resource->url,

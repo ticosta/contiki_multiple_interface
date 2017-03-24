@@ -3,11 +3,12 @@
  *
  */
 
-#ifndef EXAMPLES_HTTP_COAP_ER_HTTP_H_
-#define EXAMPLES_HTTP_COAP_ER_HTTP_H_
+#ifndef ER_HTTP_H_
+#define ER_HTTP_H_
 
-#include "rest-engine.h"
+//#include "contiki-net.h"
+//#include "rest-engine.h"
 
 
 
-#endif /* EXAMPLES_HTTP_COAP_ER_HTTP_H_ */
+#endif /* ER_HTTP_H_ */

@@ -23,21 +23,27 @@
 #endif
 
 
+
+
 /** Initialize the REST implementation. */
 void http_init_engine(void) {
 	process_start(&httpd_process, NULL);
 }
 
 /** Get request URI path. */
-int http_get_header_uri_path(void *request, const char **url) {
-	// TODO
-	return 0;
+int http_get_header_uri_path(void *request, const char **path) {
+	const struct httpd_state *http_s = (struct httpd_state *)request;
+	*path = http_s->uri;
+
+	return http_s->uri_len;;
 }
 
 /** Get the method of a request. */
 rest_resource_flags_t http_get_rest_method(void *request) {
-	// TODO
-	return 0;
+	struct httpd_state *http_s = (struct httpd_state *)request;
+
+	  return (rest_resource_flags_t)(1 <<
+	                                 (http_s->request_type - 1));
 }
 
 /** Set the status code of a response. */
@@ -47,17 +53,21 @@ int http_set_status_code(void *response, unsigned int code) {
 }
 
 /** Get the content-type of a request. */
-int http_get_header_content_format(void *request,
+int http_get_header_content_type(void *request,
 							 unsigned int *content_format) {
-	// TODO
-	return 0;
+	struct httpd_state *http_s = (struct httpd_state *)request;
+
+	*content_format = http_s->response.content_type;
+	return 1;
 }
 
 /** Set the Content-Type of a response. */
-int http_set_header_content_format(void *response,
-							 unsigned int content_format) {
-	// TODO
-	return 0;
+int http_set_header_content_type(void *response,
+							 unsigned int content_type) {
+	struct httpd_state *http_s = (struct httpd_state *)response;
+
+	http_s->response.content_type = content_type;
+	return 1;
 }
 
 /** Get the Accept types of a request. */
@@ -86,6 +96,7 @@ int http_get_header_max_age(void *request, uint32_t *age) {
 
 /** Set the Max-Age option of a response. */
 int http_set_header_max_age(void *response, uint32_t age) {
+	struct httpd_state *http_s = (struct httpd_state *)response;
 	// TODO
 	return 0;
 }
@@ -93,30 +104,38 @@ int http_set_header_max_age(void *response, uint32_t age) {
 /** Set the ETag option of a response. */
 int http_set_header_etag(void *response, const uint8_t *etag,
 					 size_t length) {
-	// TODO
+	struct httpd_state *http_s = (struct httpd_state *)response;
+	// TODO: etag é especifico do CoAP, e serve para marcar a resource com uma versão.
+
+
+	// return: len da etag
 	return 0;
 }
 
 /** Get the If-Match option of a request. */
 int http_get_header_if_match(void *request, const uint8_t **etag) {
+	struct httpd_state *http_s = (struct httpd_state *)request;
 	// TODO
 	return 0;
 }
 
 /** Get the If-Match option of a request. */
 int http_get_header_if_none_match(void *request) {
+	struct httpd_state *http_s = (struct httpd_state *)request;
 	// TODO
 	return 0;
 }
 
 /** Get the Host option of a request. */
 int http_get_header_uri_host(void *request, const char **host) {
+	struct httpd_state *http_s = (struct httpd_state *)request;
 	// TODO
 	return 0;
 }
 
 /** Set the location option of a response. */
 int http_set_header_location_path(void *response, const char *location) {
+	struct httpd_state *http_s = (struct httpd_state *)response;
 	// TODO
 	return 0;
 }
@@ -130,8 +149,11 @@ int http_get_payload(void *request, const uint8_t **payload) {
 /** Set the payload option of a response. */
 int http_set_payload(void *response, const void *payload,
 						  size_t length) {
-	// TODO
-	return 0;
+	http_response *rsp = (http_response *)response;
+
+	rsp->blen = MIN(REST_MAX_CHUNK_SIZE, length);
+	memcpy(rsp->buf, payload, rsp->blen);
+	return rsp->blen;
 }
 
 /** Get the query string of a request. */
@@ -178,8 +200,8 @@ const struct rest_implementation http_rest_implementation = {
   http_get_rest_method,
   http_set_status_code,
 
-  http_get_header_content_format,
-  http_set_header_content_format,
+  http_get_header_content_type,
+  http_set_header_content_type,
   http_get_header_accept,
   http_get_header_size2,
   http_set_header_size2,

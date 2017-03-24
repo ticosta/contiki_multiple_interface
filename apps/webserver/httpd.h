@@ -45,7 +45,7 @@ struct httpd_state {
   char inputbuf[50];
   char filename[20];
   char state;
-  struct httpd_fs_file file;  
+  struct httpd_fs_file file;
   int len;
   char *scriptptr;
   int scriptlen;
