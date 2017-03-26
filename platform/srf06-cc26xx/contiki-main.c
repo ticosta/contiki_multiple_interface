@@ -70,15 +70,13 @@
 
 #include <stdio.h>
 
-#include "ethernet-dev.h"
+/*---------------------------------------------------------------------------*/
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+#include "core/net/eth/ethernet-defs.h"
+#include "core/net/eth/ethernet-dev.h"
 #include "tools/sicslow_ethernet.h"
 
-/*---------------------------------------------------------------------------*/
-unsigned short node_id = 0;
-/*---------------------------------------------------------------------------*/
-/** \brief Board specific iniatialisation */
-void board_init(void);
-/*---------------------------------------------------------------------------*/
+
 // used to fill with adapted ll address from 802.15.4
 // ethernet MAC address
 // TODO: Currently we use it hardcoded.
@@ -91,11 +89,19 @@ uip_ipaddr_t default_neighbor_ip6_addr = {
 		.u16[1] = 0x0021,
 		.u16[2] = 0x0,
 		.u16[3] = 0x0,
-		.u16[4] = 0x1202,
+		.u16[4] = 0x1200,
 		.u16[5] = 0xFF4B,
 		.u16[6] = 0x27FE,
 		.u16[7] = 0x0EC5};
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 /*---------------------------------------------------------------------------*/
+unsigned short node_id = 0;
+/*---------------------------------------------------------------------------*/
+/** \brief Board specific iniatialisation */
+void board_init(void);
+/*---------------------------------------------------------------------------*/
+
+
 
 
 static void
@@ -129,16 +135,18 @@ set_rf_params(void)
   short_addr = ext_addr[7];
   short_addr |= ext_addr[6] << 8;
 
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
   /* In case the OUI contain a broadcast bit, we mask that out here. */
-  ethernet_macaddr[0] = (ethernet_macaddr[0] & 0xfe);
+  ext_addr[0] = (ext_addr[0] & 0xfe);
   /* Set the U/L bit, in order to create a locally administered MAC address
      as stated by the RFC 2464 */
-  ethernet_macaddr[0] = (ethernet_macaddr[0] | 0x02);
+  ext_addr[0] = (ext_addr[0] | 0x02);
 
   // Just to make it compatible with our ethernet translation.
   ext_addr[3] = 0xFF;
   ext_addr[4] = 0xFE;
   translate_lowpan_to_eth(&ethernet_if_addr, (uip_lladdr_t *)&ext_addr);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
   /* Populate linkaddr_node_addr. Maintain endianness */
   memcpy(&linkaddr_node_addr, &ext_addr[8 - LINKADDR_SIZE], LINKADDR_SIZE);
@@ -162,6 +170,79 @@ set_rf_params(void)
   node_id = short_addr;
   printf(" Node ID: %d\n", node_id);
 }
+/*---------------------------------------------------------------------------*/
+/**
+ * Initialise ethernet interfaces
+ */
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+static void init_eth_if(void) {
+	uip_ipaddr_t loc_fipaddr;
+
+	// Select ethernet interface
+	uip_ds6_select_netif(UIP_DEFAULT_INTERFACE_ID);
+
+	memset(uip_ds6_prefix_list, 0, sizeof(uip_ds6_prefix_list));
+	memset(&uip_ds6_if, 0, sizeof(uip_ds6_if));
+	// Set interface parameters
+	uip_ds6_if.link_mtu = UIP_LINK_MTU;
+	uip_ds6_if.cur_hop_limit = UIP_TTL;
+	uip_ds6_if.base_reachable_time = UIP_ND6_REACHABLE_TIME;
+	uip_ds6_if.reachable_time = uip_ds6_compute_reachable_time();
+	uip_ds6_if.retrans_timer = UIP_ND6_RETRANS_TIMER;
+	uip_ds6_if.maxdadns = UIP_ND6_DEF_MAXDADNS;
+
+	// Create link local address, prefix, multicast addresses, anycast addresses
+	uip_create_linklocal_prefix(&loc_fipaddr);
+	// TODO: Need to make it different from Radio interface. Is this the right way?
+	loc_fipaddr.u8[2] = IP_LINK_LOCAL_PREFIX_BYTE;
+#if UIP_CONF_ROUTER
+	uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0, 0, 0, 0);
+#else // UIP_CONF_ROUTER
+	uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0);
+#endif // UIP_CONF_ROUTER
+	uip_ds6_set_addr_iid(&loc_fipaddr, &uip_lladdr);
+	uip_ds6_addr_add(&loc_fipaddr, 0, ADDR_AUTOCONF);
+
+	uip_create_linklocal_allnodes_mcast(&loc_fipaddr);
+	uip_ds6_maddr_add(&loc_fipaddr);
+#if UIP_CONF_ROUTER
+	uip_create_linklocal_allrouters_mcast(&loc_fipaddr);
+	uip_ds6_maddr_add(&loc_fipaddr);
+#endif
+
+if(!UIP_CONF_IPV6_RPL) {
+  uip_ipaddr_t ipaddr;
+  int i;
+
+  uip_ip6addr(&ipaddr, UIP_DS6_DEFAULT_PREFIX, 0, 0, 0, 0, 0, 0, IPV6_CONF_ADDR_8);
+  //uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr);
+  uip_ds6_addr_add(&ipaddr, 0, ADDR_TENTATIVE);
+  printf("* Ethernet: Tentative global IPv6 address ");
+  for(i = 0; i < 7; ++i) {
+	  printf("%02x%02x:",
+		   ipaddr.u8[i * 2], ipaddr.u8[i * 2 + 1]);
+  }
+  printf("%02x%02x\n",
+		 ipaddr.u8[7 * 2], ipaddr.u8[7 * 2 + 1]);
+}
+
+	// TODO: passar para maiúsculas
+	printf("* Ethernet: Tentative link-local IPv6 address ");
+	{
+	uip_ds6_addr_t *lladdr;
+	int i;
+	lladdr = uip_ds6_get_link_local(-1);
+	for(i = 0; i < 7; ++i) {
+		printf("%02x%02x:", lladdr->ipaddr.u8[i * 2],
+			 lladdr->ipaddr.u8[i * 2 + 1]);
+	}
+	printf("%02x%02x\n", lladdr->ipaddr.u8[14], lladdr->ipaddr.u8[15]);
+	}
+
+	  // Initializes the ethernet interface
+	  ethernet_dev_init();
+}
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 /*---------------------------------------------------------------------------*/
 /**
  * \brief Main function for CC26xx-based platforms
@@ -255,6 +336,10 @@ main(void)
   memcpy(&uip_lladdr.addr, &linkaddr_node_addr, sizeof(uip_lladdr.addr));
   queuebuf_init();
   process_start(&tcpip_process, NULL);
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+  init_eth_if();
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
   //
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
