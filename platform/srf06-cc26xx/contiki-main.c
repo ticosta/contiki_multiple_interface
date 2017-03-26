@@ -69,12 +69,35 @@
 #include "driverlib/driverlib_release.h"
 
 #include <stdio.h>
+
+#include "ethernet-dev.h"
+#include "tools/sicslow_ethernet.h"
+
 /*---------------------------------------------------------------------------*/
 unsigned short node_id = 0;
 /*---------------------------------------------------------------------------*/
 /** \brief Board specific iniatialisation */
 void board_init(void);
 /*---------------------------------------------------------------------------*/
+// used to fill with adapted ll address from 802.15.4
+// ethernet MAC address
+// TODO: Currently we use it hardcoded.
+// TODO: May be its a better idea generate it based on hardware serial number or someting like that
+uip_eth_addr ethernet_if_addr;
+
+// The default Neighbor
+uip_ipaddr_t default_neighbor_ip6_addr = {
+		.u16[0] = 0x80FE,
+		.u16[1] = 0x0021,
+		.u16[2] = 0x0,
+		.u16[3] = 0x0,
+		.u16[4] = 0x1202,
+		.u16[5] = 0xFF4B,
+		.u16[6] = 0x27FE,
+		.u16[7] = 0x0EC5};
+/*---------------------------------------------------------------------------*/
+
+
 static void
 fade(unsigned char l)
 {
@@ -106,6 +129,17 @@ set_rf_params(void)
   short_addr = ext_addr[7];
   short_addr |= ext_addr[6] << 8;
 
+  /* In case the OUI contain a broadcast bit, we mask that out here. */
+  ethernet_macaddr[0] = (ethernet_macaddr[0] & 0xfe);
+  /* Set the U/L bit, in order to create a locally administered MAC address
+     as stated by the RFC 2464 */
+  ethernet_macaddr[0] = (ethernet_macaddr[0] | 0x02);
+
+  // Just to make it compatible with our ethernet translation.
+  ext_addr[3] = 0xFF;
+  ext_addr[4] = 0xFE;
+  translate_lowpan_to_eth(&ethernet_if_addr, (uip_lladdr_t *)&ext_addr);
+
   /* Populate linkaddr_node_addr. Maintain endianness */
   memcpy(&linkaddr_node_addr, &ext_addr[8 - LINKADDR_SIZE], LINKADDR_SIZE);
 
@@ -117,16 +151,12 @@ set_rf_params(void)
   NETSTACK_RADIO.get_value(RADIO_PARAM_CHANNEL, &val);
   printf(" RF: Channel %d\n", val);
 
-#if STARTUP_CONF_VERBOSE
-  {
-    int i;
-    printf(" Link layer addr: ");
-    for(i = 0; i < LINKADDR_SIZE - 1; i++) {
-      printf("%02x:", linkaddr_node_addr.u8[i]);
-    }
-    printf("%02x\n", linkaddr_node_addr.u8[i]);
+  int i;
+  printf("* Link layer addr: ");
+  for(i = 0; i < LINKADDR_SIZE - 1; i++) {
+    printf("%02x:", linkaddr_node_addr.u8[i]);
   }
-#endif
+  printf("%02x\n", linkaddr_node_addr.u8[i]);
 
   /* also set the global node id */
   node_id = short_addr;
@@ -184,7 +214,7 @@ main(void)
   cc26xx_uart_init();
 #endif
 
-  serial_line_init();
+  ///////serial_line_init();
 
   printf("Starting " CONTIKI_VERSION_STRING "\n");
   printf("With DriverLib v%u.%u\n", DRIVERLIB_RELEASE_GROUP,
@@ -225,6 +255,12 @@ main(void)
   memcpy(&uip_lladdr.addr, &linkaddr_node_addr, sizeof(uip_lladdr.addr));
   queuebuf_init();
   process_start(&tcpip_process, NULL);
+
+  //
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+  uip_ds6_select_netif(UIP_RADIO_INTERFACE_ID);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
 #endif /* NETSTACK_CONF_WITH_IPV6 */
 
   fade(LEDS_GREEN);
@@ -233,7 +269,7 @@ main(void)
 
   autostart_start(autostart_processes);
 
-  watchdog_start();
+  //watchdog_start();
 
   fade(LEDS_ORANGE);
 
@@ -241,7 +277,7 @@ main(void)
     uint8_t r;
     do {
       r = process_run();
-      watchdog_periodic();
+      //watchdog_periodic();
     } while(r > 0);
 
     /* Drop to some low power mode */

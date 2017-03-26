@@ -114,14 +114,40 @@ enum {
 /* Called on IP packet output. */
 #if NETSTACK_CONF_WITH_IPV6
 
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+static uint8_t (* outputfunc[UIP_CONF_DS6_INTERFACES_NUMBER])(const uip_lladdr_t *a);
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 static uint8_t (* outputfunc)(const uip_lladdr_t *a);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
 uint8_t
 tcpip_output(const uip_lladdr_t *a)
 {
   int ret;
   if(outputfunc != NULL) {
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	  PRINTF("* tcpip_output: Output interface selected: %d\n", if_ds6_selector);
+	  // get the neighbor
+	  uip_ds6_nbr_t *nbr = uip_ds6_nbr_ll_lookup(a);
+	  if(nbr == NULL) {
+		  PRINTF("* tcpip_output: no Neighbor found for ll: ");
+		  PRINTLLADDR((const uip_lladdr_t *)a->addr);
+		  PRINTF("\n");
+
+		  return 0;
+	  }
+
+	  // select the neighbor corresponding interface
+	  uip_ds6_select_netif(nbr->netif_idx);
+	  PRINTF("* tcpip_output: With Neighbor: ");
+	  PRINT6ADDR(&nbr->ipaddr);
+	  PRINTF(" with interface %d\n", if_ds6_selector);
+
+	  ret = outputfunc[if_ds6_selector](a);
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
     ret = outputfunc(a);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
     return ret;
   }
   UIP_LOG("tcpip_output: Use tcpip_set_outputfunc() to set an output function");
@@ -131,7 +157,12 @@ tcpip_output(const uip_lladdr_t *a)
 void
 tcpip_set_outputfunc(uint8_t (*f)(const uip_lladdr_t *))
 {
-  outputfunc = f;
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	PRINTF("* tcpip_set_outputfunc: Output function configured: %d\n", if_ds6_selector);
+	outputfunc[if_ds6_selector] = f;
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+	  outputfunc = f;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 }
 #else
 
@@ -192,6 +223,7 @@ packet_input(void)
 {
   if(uip_len > 0) {
 
+// by default this is not defined when NETSTACK_CONF_WITH_IPV6 = 1
 #if UIP_CONF_IP_FORWARD
     tcpip_is_forwarding = 1;
     if(uip_fw_forward() != UIP_FW_LOCAL) {
@@ -464,18 +496,39 @@ eventhandler(process_event_t ev, process_data_t data)
           uip_ds6_periodic();
           tcpip_ipv6_output();
         }*/
+
 #if !UIP_CONF_ROUTER
-    if(data == &uip_ds6_timer_rs &&
-        etimer_expired(&uip_ds6_timer_rs)) {
-      uip_ds6_send_rs();
-      tcpip_ipv6_output();
-    }
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	int i;
+	for(i = 0; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++) {
+		// select the right interface
+		uip_ds6_select_netif(i);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+	    if(data == &uip_ds6_timer_rs &&
+	        etimer_expired((struct etimer *)&uip_ds6_timer_rs)) {
+	      uip_ds6_send_rs();
+	      tcpip_ipv6_output();
+	      break;
+	    }
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	}
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 #endif /* !UIP_CONF_ROUTER */
-    if(data == &uip_ds6_timer_periodic &&
-        etimer_expired(&uip_ds6_timer_periodic)) {
-      uip_ds6_periodic();
-      tcpip_ipv6_output();
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	for(i = 0; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++) {
+		// select the right interface
+		uip_ds6_select_netif(i);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+		if(data == &uip_ds6_timer_periodic &&
+			etimer_expired(&uip_ds6_timer_periodic)) {
+		  uip_ds6_periodic();
+		  tcpip_ipv6_output();
+		  break;
+		}
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
     }
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 #endif /* NETSTACK_CONF_WITH_IPV6 */
   }
   break;
@@ -526,6 +579,9 @@ tcpip_input(void)
 }
 /*---------------------------------------------------------------------------*/
 #if NETSTACK_CONF_WITH_IPV6
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+extern uip_ipaddr_t default_neighbor_ip6_addr;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 void
 tcpip_ipv6_output(void)
 {
@@ -579,13 +635,27 @@ tcpip_ipv6_output(void)
 
     if(nexthop == NULL) {
       uip_ds6_route_t *route;
-      /* Check if we have a route to the destination address. */
+      /* Check if we have a route to the destination address.
+       * Currently only RPL add routes. */
       route = uip_ds6_route_lookup(&UIP_IP_BUF->destipaddr);
 
       /* No route was found - we send to the default route instead. */
       if(route == NULL) {
         PRINTF("tcpip_ipv6_output: no route found, using default route\n");
+        // Here, a default-route means a Neighbor know through a NA
         nexthop = uip_ds6_defrt_choose();
+
+        /* Before using the fallback interface or discard the packet,
+         * try to use the default neighbor. */
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+        if(nexthop == NULL) {
+        	PRINTF("* tcpip_ipv6_output: Choosing default Neighbor!\n");
+        	nexthop = &default_neighbor_ip6_addr;
+        	// Select the default interface
+    		uip_ds6_select_netif(UIP_DEFAULT_INTERFACE_ID);
+        }
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
         if(nexthop == NULL) {
 #ifdef UIP_FALLBACK_INTERFACE
           PRINTF("FALLBACK: removing ext hdrs & setting proto %d %d\n",
@@ -681,7 +751,7 @@ tcpip_ipv6_output(void)
          * address SHOULD be placed in the IP Source Address of the outgoing
          * solicitation.  Otherwise, any one of the addresses assigned to the
          * interface should be used."*/
-        if(uip_ds6_is_my_addr(&UIP_IP_BUF->srcipaddr)){
+        if(uip_ds6_is_my_addr(&UIP_IP_BUF->srcipaddr)) {
           uip_nd6_ns_output(&UIP_IP_BUF->srcipaddr, NULL, &nbr->ipaddr);
         } else {
           uip_nd6_ns_output(NULL, NULL, &nbr->ipaddr);
@@ -727,7 +797,7 @@ tcpip_ipv6_output(void)
       /*
        * Send the queued packets from here, may not be 100% perfect though.
        * This happens in a few cases, for example when instead of receiving a
-       * NA after sendiong a NS, you receive a NS with SLLAO: the entry moves
+       * NA after sending a NS, you receive a NS with SLLAO: the entry moves
        * to STALE, and you must both send a NA and the queued packet.
        */
       if(uip_packetqueue_buflen(&nbr->packethandle) != 0) {

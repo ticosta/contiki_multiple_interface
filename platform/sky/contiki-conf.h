@@ -144,7 +144,7 @@
 #define LINKADDR_CONF_SIZE              8
 
 #define UIP_CONF_LL_802154              1
-#define UIP_CONF_LLH_LEN                0
+//#define UIP_CONF_LLH_LEN                0
 
 #define UIP_CONF_ROUTER                 1
 
@@ -156,8 +156,8 @@
 #define UIP_CONF_MAX_ROUTES   16
 #endif /* UIP_CONF_MAX_ROUTES */
 
-#define UIP_CONF_ND6_SEND_RA		0
-#define UIP_CONF_ND6_SEND_NS		0
+#define UIP_CONF_ND6_SEND_RA		1
+#define UIP_CONF_ND6_SEND_NS		1
 #define UIP_CONF_ND6_REACHABLE_TIME     600000
 #define UIP_CONF_ND6_RETRANS_TIMER      10000
 
@@ -187,7 +187,7 @@
 #define UIP_CONF_ICMP_DEST_UNREACH 1
 
 #define UIP_CONF_DHCP_LIGHT
-#define UIP_CONF_LLH_LEN         0
+//#define UIP_CONF_LLH_LEN         0
 #ifndef  UIP_CONF_RECEIVE_WINDOW
 #define UIP_CONF_RECEIVE_WINDOW  48
 #endif

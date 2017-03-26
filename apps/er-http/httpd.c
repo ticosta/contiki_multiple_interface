@@ -51,6 +51,7 @@
 //#include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <ctype.h>
 

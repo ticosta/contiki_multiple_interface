@@ -46,7 +46,9 @@ CFLAGS += -Werror
 endif
 
 ### Are we building with code size optimisations?
-ifeq ($(SMALL),1)
+ifeq ($(SMALL),0)
+  CFLAGS += -O0
+else ifeq ($(SMALL),1)
   CFLAGS += -Os
 else
   CFLAGS += -O2

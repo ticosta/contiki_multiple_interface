@@ -54,6 +54,9 @@
 #include "cfs/cfs-coffee.h"
 #include "sys/autostart.h"
 
+//
+#include "tools/sicslow_ethernet.h"
+
 #if UIP_CONF_ROUTER
 
 #ifndef UIP_ROUTER_MODULE
@@ -105,6 +108,32 @@ static uint8_t is_gateway;
 #endif /* DEBUG */
 
 void init_platform(void);
+
+// used to fill with adapted ll address from 802.15.4
+// ethernet MAC address
+uip_eth_addr ethernet_if_addr;
+
+// TODO: Currently we use it hardcoded.
+// TODO: May be its a better idea generate it based on hardware serial number or someting like that
+//uip_ipaddr_t default_neighbor_ip6_addr = {
+//		.u16[0] = 0xfe80,
+//		.u16[1] = 0x0,
+//		.u16[2] = 0x0,
+//		.u16[3] = 0x0,
+//		.u16[4] = 0x20c,
+//		.u16[5] = 0x29ff,
+//		.u16[6] = 0xfedd,
+//		.u16[7] = 0x747a};
+
+uip_ipaddr_t default_neighbor_ip6_addr = {
+		.u16[0] = 0x80fe,
+		.u16[1] = 0x0,
+		.u16[2] = 0x0,
+		.u16[3] = 0x0,
+		.u16[4] = 0x0c02,
+		.u16[5] = 0xff29,
+		.u16[6] = 0xddfe,
+		.u16[7] = 0x7a74};
 
 /*---------------------------------------------------------------------------*/
 #if 0
@@ -211,7 +240,7 @@ main(int argc, char **argv)
   ds2411_init();
 
   /* XXX hack: Fix it so that the 802.15.4 MAC address is compatible
-     with an Ethernet MAC address - byte 0 (byte 2 in the DS ID)
+     with an Ethernet MAC address - byte 0 (byte 2 in the ds2411_id)
      cannot be odd. */
   ds2411_id[2] &= 0xfe;
 
@@ -246,7 +275,12 @@ main(int argc, char **argv)
 #endif
 
   random_init(ds2411_id[0] + node_id);
+  // Just to make it compatible with ethernet translation
+  ds2411_id[3] = 0xFF;
+  ds2411_id[4] = 0xFE;
+  translate_lowpan_to_eth(&ethernet_if_addr, (uip_lladdr_t *)&ds2411_id);
   
+
   leds_off(LEDS_BLUE);
   /*
    * Initialize Contiki and our processes.
@@ -313,6 +347,10 @@ main(int argc, char **argv)
   
   process_start(&tcpip_process, NULL);
 
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+  uip_ds6_select_netif(UIP_RADIO_INTERFACE_ID);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
 #if DEBUG
   PRINTF("Tentative link-local IPv6 address ");
   {
@@ -330,6 +368,7 @@ main(int argc, char **argv)
   if(!UIP_CONF_IPV6_RPL) {
     uip_ipaddr_t ipaddr;
     int i;
+
     uip_ip6addr(&ipaddr, UIP_DS6_DEFAULT_PREFIX, 0, 0, 0, 0, 0, 0, 0);
     uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr);
     uip_ds6_addr_add(&ipaddr, 0, ADDR_TENTATIVE);

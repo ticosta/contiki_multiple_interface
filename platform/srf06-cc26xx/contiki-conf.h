@@ -210,11 +210,11 @@
 /* Addresses, Sizes and Interfaces */
 #define LINKADDR_CONF_SIZE                   8
 #define UIP_CONF_LL_802154                   1
-#define UIP_CONF_LLH_LEN                     0
+#define UIP_CONF_LLH_LEN                     14
 
 /* The size of the uIP main buffer */
 #ifndef UIP_CONF_BUFFER_SIZE
-#define UIP_CONF_BUFFER_SIZE              1000
+#define UIP_CONF_BUFFER_SIZE              1300
 #endif
 
 /* ND and Routing */

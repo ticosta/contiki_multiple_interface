@@ -175,9 +175,13 @@ typedef struct uip_ds6_defrt {
   uint8_t isinfinite;
 } uip_ds6_defrt_t;
 
-/** \name Default router list basic routines */
+/** \name Default router list basic routines. A default router is a Neighbor known through a RA. */
 /** @{ */
 uip_ds6_defrt_t *uip_ds6_defrt_head(void);
+/**
+ * Used by RPL and when a ICMP6 RA is received.
+ * Represent the neighbors.
+ */
 uip_ds6_defrt_t *uip_ds6_defrt_add(uip_ipaddr_t *ipaddr,
                                    unsigned long interval);
 void uip_ds6_defrt_rm(uip_ds6_defrt_t *defrt);

@@ -54,23 +54,55 @@
 #define DEBUG DEBUG_NONE
 #include "net/ip/uip-debug.h"
 
-struct etimer uip_ds6_timer_periodic;                           /**< Timer for maintenance of data structures */
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	struct etimer __uip_ds6_timer_periodic[UIP_CONF_DS6_INTERFACES_NUMBER];		/**< Timer for maintenance of data structures */
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+	struct etimer uip_ds6_timer_periodic;	/**< Timer for maintenance of data structures */
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
 #if UIP_CONF_ROUTER
-struct stimer uip_ds6_timer_ra;                                 /**< RA timer, to schedule RA sending */
-#if UIP_ND6_SEND_RA
-static uint8_t racount;                                         /**< number of RA already sent */
-static uint16_t rand_time;                                      /**< random time value for timers */
-#endif
+	#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+		struct stimer __uip_ds6_timer_ra[UIP_CONF_DS6_INTERFACES_NUMBER];                                 /**< RA timers, to schedule RA sending */
+
+	#if UIP_ND6_SEND_RA
+		static uint8_t __racount[UIP_CONF_DS6_INTERFACES_NUMBER];                                         /**< number of RA already sent */
+#define racount			(__racount[if_ds6_selector])
+		static uint16_t __rand_time[UIP_CONF_DS6_INTERFACES_NUMBER];                                      /**< random time value for timers */
+#define rand_time		(__rand_time[if_ds6_selector])
+	#endif /* UIP_ND6_SEND_RA */
+
+	#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+		struct stimer uip_ds6_timer_ra;                                 /**< RA timer, to schedule RA sending */
+
+		#if UIP_ND6_SEND_RA
+			static uint8_t racount;                                         /**< number of RA already sent */
+			static uint16_t rand_time;                                      /**< random time value for timers */
+		#endif /* UIP_ND6_SEND_RA */
+	#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
 #else /* UIP_CONF_ROUTER */
-struct etimer uip_ds6_timer_rs;                                 /**< RS timer, to schedule RS sending */
-static uint8_t rscount;                                         /**< number of rs already sent */
+	#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+		struct etimer __uip_ds6_timer_rs[UIP_CONF_DS6_INTERFACES_NUMBER];	/**< RS timers, to schedule RS sending */
+		static uint8_t __rscount[UIP_CONF_DS6_INTERFACES_NUMBER];           /**< number of rs already sent by each interface */
+	#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+		struct etimer uip_ds6_timer_rs;                                 /**< RS timer, to schedule RS sending */
+		static uint8_t rscount;                                         /**< number of rs already sent */
+	#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 #endif /* UIP_CONF_ROUTER */
+
 
 /** \name "DS6" Data structures */
 /** @{ */
-uip_ds6_netif_t uip_ds6_if;                                     /**< The single interface */
-uip_ds6_prefix_t uip_ds6_prefix_list[UIP_DS6_PREFIX_NB];        /**< Prefix list */
+uint8_t if_ds6_selector;
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	uip_ds6_netif_t __uip_ds6_if[UIP_CONF_DS6_INTERFACES_NUMBER];   									/**< The Multiple interfaces */
+	uip_ds6_prefix_t __uip_ds6_prefix_list[UIP_CONF_DS6_INTERFACES_NUMBER][UIP_DS6_PREFIX_NB];        	/**< Prefix list */
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+	uip_ds6_netif_t __uip_ds6_if[1];   									/**< The single interface */
+	uip_ds6_prefix_t __uip_ds6_prefix_list[1][UIP_DS6_PREFIX_NB];     	/**< Prefix list */
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
 
 /* Used by Cooja to enable extraction of addresses from memory.*/
 uint8_t uip_ds6_addr_size;
@@ -93,6 +125,11 @@ static uip_ds6_prefix_t *locprefix;
 void
 uip_ds6_init(void)
 {
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+  // select the default interface
+  uip_ds6_select_netif(UIP_RADIO_INTERFACE_ID);
+  int i;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
   uip_ds6_neighbors_init();
   uip_ds6_route_init();
@@ -126,6 +163,39 @@ uip_ds6_init(void)
 
   uip_create_linklocal_allnodes_mcast(&loc_fipaddr);
   uip_ds6_maddr_add(&loc_fipaddr);
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+#if UIP_CONF_ROUTER
+  uip_create_linklocal_allrouters_mcast(&loc_fipaddr);
+  uip_ds6_maddr_add(&loc_fipaddr);
+#if UIP_ND6_SEND_RA
+  // initialize RS timers for all interfaces
+  for(i = 0; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++) {
+	  uip_ds6_select_netif(i);
+	  stimer_set(&uip_ds6_timer_ra, 2);     /* wait to have a link local IP address */
+  }
+#endif /* UIP_ND6_SEND_RA */
+#else /* UIP_CONF_ROUTER */
+  // initialize RS timers for all interfaces
+  for(i = 0; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++) {
+	  uip_ds6_select_netif(i);
+	  etimer_set(&uip_ds6_timer_rs,
+				 random_rand() % (UIP_ND6_MAX_RTR_SOLICITATION_DELAY *
+								  CLOCK_SECOND));
+  }
+#endif /* UIP_CONF_ROUTER */
+
+  // initialize periodic timers for all interfaces
+  for(i = 0; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++) {
+	  uip_ds6_select_netif(i);
+	  // to prevent the occurrence of events with uninitialized interfaces, ALL the interfaces MUST
+	  // be initializes before calling this function or just after.
+	  etimer_set(&uip_ds6_timer_periodic, UIP_DS6_PERIOD);
+  }
+
+  // restores the initial selection
+  uip_ds6_select_netif(UIP_RADIO_INTERFACE_ID);
+
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 #if UIP_CONF_ROUTER
   uip_create_linklocal_allrouters_mcast(&loc_fipaddr);
   uip_ds6_maddr_add(&loc_fipaddr);
@@ -137,7 +207,9 @@ uip_ds6_init(void)
              random_rand() % (UIP_ND6_MAX_RTR_SOLICITATION_DELAY *
                               CLOCK_SECOND));
 #endif /* UIP_CONF_ROUTER */
+
   etimer_set(&uip_ds6_timer_periodic, UIP_DS6_PERIOD);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
   return;
 }
@@ -147,7 +219,6 @@ uip_ds6_init(void)
 void
 uip_ds6_periodic(void)
 {
-
   /* Periodic processing on unicast addresses */
   for(locaddr = uip_ds6_if.addr_list;
       locaddr < uip_ds6_if.addr_list + UIP_DS6_ADDR_NB; locaddr++) {
@@ -197,7 +268,11 @@ uip_ds6_periodic(void)
     uip_ds6_send_ra_periodic();
   }
 #endif /* UIP_CONF_ROUTER && UIP_ND6_SEND_RA */
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
   etimer_reset(&uip_ds6_timer_periodic);
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+  etimer_reset(&uip_ds6_timer_periodic);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
   return;
 }
 
@@ -299,12 +374,28 @@ uip_ds6_prefix_rm(uip_ds6_prefix_t *prefix)
 uip_ds6_prefix_t *
 uip_ds6_prefix_lookup(uip_ipaddr_t *ipaddr, uint8_t ipaddrlen)
 {
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	uint8_t i;
+	uint8_t current_if = if_ds6_selector;
+	for(i = 0, if_ds6_selector = i; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++, if_ds6_selector = i) {
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
   if(uip_ds6_list_loop((uip_ds6_element_t *)uip_ds6_prefix_list,
                        UIP_DS6_PREFIX_NB, sizeof(uip_ds6_prefix_t),
                        ipaddr, ipaddrlen,
                        (uip_ds6_element_t **)&locprefix) == FOUND) {
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
     return locprefix;
   }
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	}
+
+	if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
   return NULL;
 }
 
@@ -312,13 +403,29 @@ uip_ds6_prefix_lookup(uip_ipaddr_t *ipaddr, uint8_t ipaddrlen)
 uint8_t
 uip_ds6_is_addr_onlink(uip_ipaddr_t *ipaddr)
 {
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	uint8_t i;
+	uint8_t current_if = if_ds6_selector;
+	for(i = 0, if_ds6_selector = i; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++, if_ds6_selector = i) {
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
   for(locprefix = uip_ds6_prefix_list;
       locprefix < uip_ds6_prefix_list + UIP_DS6_PREFIX_NB; locprefix++) {
     if(locprefix->isused &&
        uip_ipaddr_prefixcmp(&locprefix->ipaddr, ipaddr, locprefix->length)) {
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+      if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
       return 1;
     }
   }
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	}
+
+	if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
   return 0;
 }
 
@@ -373,12 +480,29 @@ uip_ds6_addr_rm(uip_ds6_addr_t *addr)
 uip_ds6_addr_t *
 uip_ds6_addr_lookup(uip_ipaddr_t *ipaddr)
 {
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	uint8_t i;
+	uint8_t current_if = if_ds6_selector;
+	for(i = 0, if_ds6_selector = i; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++, if_ds6_selector = i) {
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
   if(uip_ds6_list_loop
      ((uip_ds6_element_t *)uip_ds6_if.addr_list, UIP_DS6_ADDR_NB,
       sizeof(uip_ds6_addr_t), ipaddr, 128,
       (uip_ds6_element_t **)&locaddr) == FOUND) {
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
     return locaddr;
   }
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	}
+
+	if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
   return NULL;
 }
 

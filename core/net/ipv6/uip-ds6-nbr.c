@@ -95,6 +95,9 @@ uip_ds6_nbr_add(const uip_ipaddr_t *ipaddr, const uip_lladdr_t *lladdr,
 #if UIP_CONF_IPV6_QUEUE_PKT
     uip_packetqueue_new(&nbr->packethandle);
 #endif /* UIP_CONF_IPV6_QUEUE_PKT */
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+    nbr->netif_idx = if_ds6_selector; // associate the neighbor to the current interface
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 #if UIP_ND6_SEND_NS
     if(nbr->state == NBR_REACHABLE) {
       stimer_set(&nbr->reachable, UIP_ND6_REACHABLE_TIME / 1000);
