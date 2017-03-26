@@ -66,6 +66,7 @@ typedef struct http_response_t {
 	char buf[HTTPD_SIMPLE_MAIN_BUF_SIZE];
 	int blen;
 	uint16_t content_type;
+
 } http_response;
 
 /*---------------------------------------------------------------------------*/
@@ -96,7 +97,7 @@ typedef struct  {
   short return_code;
   // response
   http_response response;
-
+  char buffer[1250];
 }httpd_state, http_packet_t ;
 /*---------------------------------------------------------------------------*/
 

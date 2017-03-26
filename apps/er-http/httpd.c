@@ -616,7 +616,7 @@ PT_THREAD(handle_input(httpd_state *s))
         s->return_code = RETURN_CODE_SU;
       }
     }
-
+    char * ptr = s->buffer;
     /* Parse the message body, unless we have detected an error. */
     while(s->content_length > 0 && lock == s &&
           s->return_code == RETURN_CODE_OK) {
@@ -625,8 +625,13 @@ PT_THREAD(handle_input(httpd_state *s))
       s->content_length -= PSOCK_DATALEN(&s->sin);
 
       /* Parse the message body */
-      parse_post_request_chunk(s->inputbuf, PSOCK_DATALEN(&s->sin),
-                               (s->content_length == 0));
+
+      int len = PSOCK_DATALEN(&s->sin);
+      memcpy(ptr, s->inputbuf, len);
+      ptr += len;
+//      parse_post_request_chunk(s->inputbuf, PSOCK_DATALEN(&s->sin),
+//                               (s->content_length == 0));
+
       s->return_code = RETURN_CODE_OK;
 
 
