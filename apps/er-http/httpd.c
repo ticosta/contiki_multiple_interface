@@ -251,14 +251,11 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
   PT_BEGIN(&s->outputpt);
 
   PT_INIT(&s->generate_pt); /* TODO ver isso */
-  /*PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
-                         const char *content_type, const char *redir,
-                         const char **additional))*/
 
   /* Send a Not Found status */
   if(!resourse_found) {
       PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_404,
-                                                http_content_type_html,
+                                                http_content_type_txt_html,
                                                 NULL,
                                                 http_header_con_close));
 
@@ -270,21 +267,17 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 
   if(s->request_type == REQUEST_TYPE_POST) {
 	  PRINTF("***** METHOD POST *******\n");
-	  //TODO ver como e que lidadmos com esta resposta
 	  PRINTF("Return Code: %d\n", s->return_code);
     if(s->return_code == RETURN_CODE_OK) {
-    	/* TODO: Neste caso temos que dar um novo sitio para redirecionar */
-    	PRINTF("RETURN_CODE_OK\n");
+      PRINTF("RETURN_CODE_OK\n");
       PT_WAIT_THREAD(
     		  &s->outputpt,
 			  send_headers(
 					  s,
-					  http_header_302,
+					  s->response.status,
 					  s->response.content_type,
-					  //s->response.buf,
-					  // TODO
-					  "/index",
-					  NULL
+					  s->response.redir_path,
+					  s->response.additional_hdrs
 			  )
 	  	  );
     } else if(s->return_code == RETURN_CODE_LR) {
@@ -569,12 +562,21 @@ parse_coap(coap_client_request_t *coap_request, httpd_state *s){
 
     //TODO: pode nao ser 200
     s->response.status = http_header_200;
-    s->response.content_type = http_content_type_plain;
+    s->response.content_type = http_content_type_txt_plain;
     //s->return_code = coap_requ TODO:
 
     s->currentConnection = coap_request->connection;
 
 
+}
+
+static void reset_http_state_obj(httpd_state *s) {
+    s->blen = 0;
+    s->tmp_buf_len = 0;
+    s->response.blen = 0;
+	s->response.additional_hdrs = 0;
+	s->response.redir_path = 0;
+    memset(s->buffer, 0, sizeof(s->buffer));
 }
 
 /*---------------------------------------------------------------------------*/
@@ -584,11 +586,7 @@ proxy_call(void *state){
 
     httpd_state *s = (httpd_state *)memb_alloc(&conns);
 
-    s->blen = 0;
-    s->tmp_buf_len = 0;
-    s->response.blen = 0;
-    memset(s->buffer, 0, sizeof(s->buffer));
-
+    reset_http_state_obj(s);
     /* Call Parse */
     parse_coap(coap_request, s);
 
@@ -617,10 +615,7 @@ appcall(void *state)
 
   if(uip_closed() || uip_aborted() || uip_timedout()) {
 	if(s != NULL) {
-		s->blen = 0;
-		s->tmp_buf_len = 0;
-		s->response.blen = 0;
-		memset(s->buffer, 0, sizeof(s->buffer));
+		reset_http_state_obj(s);
 		memb_free(&conns, s);
 	}
   } else if(uip_connected()) {

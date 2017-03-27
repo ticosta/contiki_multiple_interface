@@ -73,6 +73,8 @@ typedef struct http_response_t {
 	const char * content_type;
 	uint16_t content_length;
 	const char * status;
+	const char **additional_hdrs;
+	const char * redir_path;
 	char imediate_response;
 } http_response;
 
@@ -124,6 +126,12 @@ void httpd_simple_register_post_handler(httpd_simple_post_handler_t *h);
 
 /** Register the RESTful service callback at implementation. */
 void http_set_service_callback(service_callback_t callback);
+
+/** Set additional headers that will be interpreted by httpd. */
+int http_set_additional_headers(void *request, const void **headers);
+
+/** Used by end-points to set redir path. Interpreted by httpd. */
+int http_set_redir_path(void *request, const void *path);
 
 /*---------------------------------------------------------------------------*/
 /*

@@ -32,6 +32,22 @@ void http_init_engine(void) {
 	process_start(&httpd_process, NULL);
 }
 
+
+int http_set_additional_headers(void *request, const void **headers) {
+	httpd_state *const http_pkt = (httpd_state *)request;
+
+	http_pkt->response.additional_hdrs = (const char **)headers;
+	return 1;
+}
+
+int http_set_redir_path(void *request, const void *path) {
+	httpd_state *const http_pkt = (httpd_state *)request;
+
+	http_pkt->response.redir_path = (char *)path;
+	return 1;
+}
+
+
 /** Get request URI path. */
 int http_get_header_uri_path(void *request, const char **path) {
 	httpd_state *const http_pkt = (httpd_state *)request;
@@ -51,13 +67,59 @@ rest_resource_flags_t http_get_rest_method(void *request) {
 /** Set the status code of a response. */
 int http_set_status_code(void *response, unsigned int code) {
     httpd_state *const http_pkt = (httpd_state *)response;
+    const char * hdr_ptr;
 
     switch(code) {
-    case 4:
-    	//http_pkt->response.status = http_header_200;
+	/* ------  2xx  ------ */
+    case OK_200:
+    	hdr_ptr = http_header_200;
     	break;
+
+	/* ------  3xx  ------ */
+    /* Found - NOTE: Has no direct mapping to CoAP status codes */
+    case FOUND_302:
+    	hdr_ptr = http_header_302;
+    	break;
+
+	/* ------  4xx  ------ */
+    case BAD_REQUEST_400:
+    	hdr_ptr = http_header_400;
+    	break;
+    case FORBIDDEN_403:
+    	hdr_ptr = http_header_403;
+    	break;
+    case NOT_FOUND_404:
+    	hdr_ptr = http_header_404;
+    	break;
+    case METHOD_NOT_ALLOWED_405:
+    	hdr_ptr = http_header_405;
+    	break;
+    case LENGTH_REQUIRED_411:
+    	hdr_ptr = http_header_411;
+    	break;
+    case REQUEST_ENTITY_TL_413:
+    	hdr_ptr = http_header_413;
+    	break;
+
+	/* ------  5xx  ------ */
+    case INTERNAL_SERVER_ERROR_500:
+    	hdr_ptr = http_header_500;
+    	break;
+    case SERVICE_UNAVAILABLE_503:
+    	hdr_ptr = http_header_503;
+    	break;
+
+	/* ------  Dummy  ------ */
+    /* Used for unimplemented status codes and to help the debug */
+    case DUMMY_STATUS_999:
+    	hdr_ptr = http_header_999;
+    	break;
+
+    default:
+    	return 0;
     }
 
+    http_pkt->response.status = hdr_ptr;
 	return 1;
 }
 
@@ -66,6 +128,8 @@ int http_get_header_content_type(void *request,
 							 unsigned int *content_format) {
 	httpd_state *const http_pkt = (httpd_state *)request;
 
+	// TODO: this should be from the request, not from the response
+	// Assume http_pkt->response.content_type is already converted
 	*content_format = (unsigned int)http_pkt->response.content_type;
 	return 1;
 }
@@ -74,10 +138,52 @@ int http_get_header_content_type(void *request,
 int http_set_header_content_type(void *request,
 							 unsigned int content_type) {
 	httpd_state *const http_pkt = (httpd_state *)request;
+	const char * content_t_ptr;
 
-	// TODO:
-	http_pkt->response.content_type = "text/plain";
+	// TODO: replace dummys
+	switch(content_type) {
+	case TEXT_PLAIN:
+		content_t_ptr = http_content_type_txt_plain;
+		break;
+	case TEXT_XML:
+		content_t_ptr = http_content_type_txt_xml;
+		break;
+	case TEXT_HTML:
+		content_t_ptr = http_content_type_txt_html;
+		break;
+	case APPLICATION_XML:
+		content_t_ptr = http_content_type_app_xml;
+		break;
+	case APPLICATION_JSON:
+		content_t_ptr = http_content_type_app_json;
+		break;
 
+	case TEXT_CSV:
+	case IMAGE_GIF:
+	case IMAGE_JPEG:
+	case IMAGE_PNG:
+	case IMAGE_TIFF:
+	case AUDIO_RAW:
+	case VIDEO_RAW:
+	case APPLICATION_LINK_FORMAT:
+	case APPLICATION_OCTET_STREAM:
+	case APPLICATION_RDF_XML:
+	case APPLICATION_SOAP_XML:
+	case APPLICATION_ATOM_XML:
+	case APPLICATION_XMPP_XML:
+	case APPLICATION_EXI:
+	case APPLICATION_FASTINFOSET:
+	case APPLICATION_SOAP_FASTINFOSET:
+	case APPLICATION_X_OBIX_BINARY:
+		content_t_ptr = http_content_type_dummy;
+		break;
+
+	default:
+		return 0;
+	}
+
+
+	http_pkt->response.content_type = content_t_ptr;
 	return 1;
 }
 
@@ -277,52 +383,53 @@ struct rest_implementation http_rest_implementation = {
   http_notify_observers,
   http_observe_handler,
 
+  // TODO: replace dummys
   {
-    CONTENT_2_05,
-    CREATED_2_01,
-    CHANGED_2_04,
-    DELETED_2_02,
-    VALID_2_03,
-    BAD_REQUEST_4_00,
-    UNAUTHORIZED_4_01,
-    BAD_OPTION_4_02,
-    FORBIDDEN_4_03,
-    NOT_FOUND_4_04,
-    METHOD_NOT_ALLOWED_4_05,
-    NOT_ACCEPTABLE_4_06,
-    REQUEST_ENTITY_TOO_LARGE_4_13,
-    UNSUPPORTED_MEDIA_TYPE_4_15,
-    INTERNAL_SERVER_ERROR_5_00,
-    NOT_IMPLEMENTED_5_01,
-    BAD_GATEWAY_5_02,
-    SERVICE_UNAVAILABLE_5_03,
-    GATEWAY_TIMEOUT_5_04,
-    PROXYING_NOT_SUPPORTED_5_05
+    OK_200,
+	DUMMY_STATUS_999, //CREATED_2_01,
+	DUMMY_STATUS_999, //CHANGED_2_04,
+	DUMMY_STATUS_999, //DELETED_2_02,
+	DUMMY_STATUS_999, //VALID_2_03,
+	BAD_REQUEST_400,
+	DUMMY_STATUS_999, //UNAUTHORIZED_4_01,
+	DUMMY_STATUS_999, //BAD_OPTION_4_02,
+    FORBIDDEN_403,
+    NOT_FOUND_404,
+	METHOD_NOT_ALLOWED_405,
+	DUMMY_STATUS_999, //NOT_ACCEPTABLE_4_06,
+    REQUEST_ENTITY_TL_413,
+	DUMMY_STATUS_999, //UNSUPPORTED_MEDIA_TYPE_4_15,
+    INTERNAL_SERVER_ERROR_500,
+	DUMMY_STATUS_999, //NOT_IMPLEMENTED_5_01,
+	DUMMY_STATUS_999, //BAD_GATEWAY_5_02,
+	SERVICE_UNAVAILABLE_503,
+	DUMMY_STATUS_999, //GATEWAY_TIMEOUT_5_04,
+	DUMMY_STATUS_999, //PROXYING_NOT_SUPPORTED_5_05
   },
 
   {
     TEXT_PLAIN,
     TEXT_XML,
-    TEXT_CSV,
+	TEXT_CSV,
     TEXT_HTML,
-    IMAGE_GIF,
-    IMAGE_JPEG,
-    IMAGE_PNG,
-    IMAGE_TIFF,
-    AUDIO_RAW,
-    VIDEO_RAW,
-    APPLICATION_LINK_FORMAT,
+	IMAGE_GIF,
+	IMAGE_JPEG,
+	IMAGE_PNG,
+	IMAGE_TIFF,
+	AUDIO_RAW,
+	VIDEO_RAW,
+	APPLICATION_LINK_FORMAT,
     APPLICATION_XML,
-    APPLICATION_OCTET_STREAM,
-    APPLICATION_RDF_XML,
-    APPLICATION_SOAP_XML,
-    APPLICATION_ATOM_XML,
-    APPLICATION_XMPP_XML,
-    APPLICATION_EXI,
-    APPLICATION_FASTINFOSET,
-    APPLICATION_SOAP_FASTINFOSET,
+	APPLICATION_OCTET_STREAM,
+	APPLICATION_RDF_XML,
+	APPLICATION_SOAP_XML,
+	APPLICATION_ATOM_XML,
+	APPLICATION_XMPP_XML,
+	APPLICATION_EXI,
+	APPLICATION_FASTINFOSET,
+	APPLICATION_SOAP_FASTINFOSET,
     APPLICATION_JSON,
-    APPLICATION_X_OBIX_BINARY
+	APPLICATION_X_OBIX_BINARY
   }
 };
 /*---------------------------------------------------------------------------*/

@@ -56,28 +56,74 @@
 /**
  * HTTP Status Headers
  */
-#define HTTP_200_OK "HTTP/1.0 200 OK\r\n"
-#define HTTP_302_FO "HTTP/1.0 302 Found\r\n"
-#define HTTP_400_BR "HTTP/1.0 400 Bad Request\r\n"
-#define HTTP_404_NF "HTTP/1.0 404 Not Found\r\n"
-#define HTTP_411_LR "HTTP/1.0 411 Length Required\r\n"
-#define HTTP_413_TL "HTTP/1.0 413 Request Entity Too Large\r\n"
-#define HTTP_503_SU "HTTP/1.0 503 Service Unavailable\r\n"
-#define CONN_CLOSE  "Connection: close\r\n"
+#define HTTP_200_OK       "HTTP/1.0 200 OK\r\n"
+/* NOTE: Has no direct mapping to CoAP status codes */
+#define HTTP_302_FO       "HTTP/1.0 302 Found\r\n"
+#define HTTP_400_BR       "HTTP/1.0 400 Bad Request\r\n"
+#define HTTP_403_FB       "HTTP/1.0 403 Forbidden\r\n"
+#define HTTP_404_NF       "HTTP/1.0 404 Not Found\r\n"
+#define HTTP_405_MNA      "HTTP/1.0 405 Method Not Allowed\r\n"
+#define HTTP_411_LR       "HTTP/1.0 411 Length Required\r\n"
+#define HTTP_413_TL       "HTTP/1.0 413 Request Entity Too Large\r\n"
+#define HTTP_500_ISR      "HTTP/1.0 500 Internal Server Error\r\n"
+#define HTTP_503_SU       "HTTP/1.0 503 Service Unavailable\r\n"
+#define HTTP_DUMMY_STATUS "HTTP/1.0 999 Dummy Status\r\n"
 /*---------------------------------------------------------------------------*/
-static const char http_content_type_html[] = "text/html";
-static const char http_content_type_plain[] = "text/plain";
+#define CONN_CLOSE        "Connection: close\r\n"
+/*---------------------------------------------------------------------------*/
+#define HTTP_CONTENT_TYPE_TEXT_PLAIN            "text/plain"
+#define HTTP_CONTENT_TYPE_TEXT_HTML             "text/html"
+#define HTTP_CONTENT_TYPE_APP_JSON              "application/json"
+#define HTTP_CONTENT_TYPE_TEXT_XML              "text/xml"
+#define HTTP_CONTENT_TYPE_APP_XML               "application/xml"
+#define HTTP_DUMMY_CONTENT_TYPE                 "dummy/type"
+/*---------------------------------------------------------------------------*/
+static const char http_content_type_txt_plain[] =             HTTP_CONTENT_TYPE_TEXT_PLAIN;
+static const char http_content_type_txt_html[] =              HTTP_CONTENT_TYPE_TEXT_HTML;
+static const char http_content_type_app_json[] =              HTTP_CONTENT_TYPE_APP_JSON;
+static const char http_content_type_txt_xml[] =               HTTP_CONTENT_TYPE_TEXT_XML;
+static const char http_content_type_app_xml[] =               HTTP_CONTENT_TYPE_APP_XML;
+static const char http_content_type_dummy[] =                 HTTP_DUMMY_CONTENT_TYPE;
 /*---------------------------------------------------------------------------*/
 /* Page template */
- static const char http_header_200[] = HTTP_200_OK;
- static const char http_header_302[] = HTTP_302_FO;
- static const char http_header_400[] = HTTP_400_BR;
- static const char http_header_404[] = HTTP_404_NF;
- static const char http_header_411[] = HTTP_411_LR;
- static const char http_header_413[] = HTTP_413_TL;
- static const char http_header_503[] = HTTP_503_SU;
- /*---------------------------------------------------------------------------*/
+static const char http_header_200[] = HTTP_200_OK;
+/* NOTE: Has no direct mapping to CoAP status codes */
+static const char http_header_302[] = HTTP_302_FO;
+static const char http_header_400[] = HTTP_400_BR;
+static const char http_header_403[] = HTTP_403_FB;
+static const char http_header_404[] = HTTP_404_NF;
+static const char http_header_405[] = HTTP_405_MNA;
+static const char http_header_411[] = HTTP_411_LR;
+static const char http_header_413[] = HTTP_413_TL;
+static const char http_header_500[] = HTTP_500_ISR;
+static const char http_header_503[] = HTTP_503_SU;
+static const char http_header_999[] = HTTP_DUMMY_STATUS;
+/*---------------------------------------------------------------------------*/
 
+/* HTTP response codes */
+/* Mapping to CoAP - https://tools.ietf.org/id/draft-ietf-core-http-mapping-07.html */
+typedef enum {
+  /* ------  2xx  ------ */
+  OK_200 =                               200,        /* OK */
+
+  /* ------  3xx  ------ */
+  FOUND_302 =                            302,        /* Found - NOTE: Has no direct mapping to CoAP status codes */
+
+  /* ------  4xx  ------ */
+  BAD_REQUEST_400 =                      400,        /* Bad Request */
+  FORBIDDEN_403 =                        403,        /* Forbidden */
+  NOT_FOUND_404 =                        404,        /* Not Found */
+  METHOD_NOT_ALLOWED_405 =               405,        /* MEthod Not Allowed */
+  LENGTH_REQUIRED_411 =                  411,        /* Length Required */
+  REQUEST_ENTITY_TL_413 =                413,        /* Request Entity Too Large */
+
+  /* ------  5xx  ------ */
+  INTERNAL_SERVER_ERROR_500 =            500,        /* Internal Server Error */
+  SERVICE_UNAVAILABLE_503 =              503,        /* Service Unavailable */
+
+  /* ------  Dummy  ------ */
+  DUMMY_STATUS_999 =                     999         /* Used for unimplemented status codes and to help the debug */
+} http_status_t;
 
 
 #endif /* HTTPD_SIMPLE_H_ */
