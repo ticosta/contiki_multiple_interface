@@ -23,9 +23,6 @@
 #else
 #define UIP_UDP_BUF  ((struct uip_udp_hdr *)&uip_buf[UIP_LLH_LEN + UIP_IPH_LEN])
 #endif
-
-#undef UIP_CONF_BUFFER_SIZE
-#define UIP_CONF_BUFFER_SIZE    1280
 /*---------------------------------------------------------------------------*/
 #define HTTPD_PATHLEN  100
 #define HTTPD_INBUF_LEN (HTTPD_PATHLEN + 10)
@@ -33,6 +30,7 @@
 #define TMP_BUF_SIZE   (UIP_TCP_MSS + 1)
 /*---------------------------------------------------------------------------*/
 /* POST request handlers */
+// TODO: pagar?
 #define HTTPD_SIMPLE_POST_HANDLER_OK      1
 #define HTTPD_SIMPLE_POST_HANDLER_UNKNOWN 0
 #define HTTPD_SIMPLE_POST_HANDLER_ERROR   0xFFFFFFFF
@@ -45,11 +43,11 @@
 #define HTTP_ACCEPT_HEADER_APPLICATION_JSON 	1 << 2
 #define HTTP_ACCEPT_HEADER_APPLICATION_XML	 	1 << 3
 #define MAX_URI_LEN	                            50
-#define PARSE_POST_BUF_SIZES                    64
+//#define PARSE_POST_BUF_SIZES                    64
 #define MAX_PAYLOAD_SIZE                        100
 
 /* Last byte always used to null terminate */
-#define PARSE_POST_MAX_POS        (PARSE_POST_BUF_SIZES - 2)
+//#define PARSE_POST_MAX_POS        (PARSE_POST_BUF_SIZES - 2)
 
 #define RETURN_CODE_OK   0
 #define RETURN_CODE_NF   1 /* Not Found */
@@ -58,39 +56,7 @@
 #define RETURN_CODE_LR   4 /* Length Required */
 #define RETURN_CODE_TL   5 /* Content Length too Large */
 
-/**
- * \brief Datatype for a handler which can process incoming POST requests
- * \param key The configuration key to be updated
- * \param key_len The length of the key argument
- * \param val The new configuration value for key
- * \param val_len The length of the value argument
- *
- * \return 1: HTTPD_SIMPLE_POST_HANDLER_OK if the function can handle the
- * request, HTTPD_SIMPLE_POST_HANDLER_UNKNOWN if it does not know how to handle
- * it. HTTPD_SIMPLE_POST_HANDLER_ERROR if it does know how to handle it but
- * the request was malformed.
- */
-#define HTTP_200_OK "HTTP/1.0 200 OK\r\n"
-#define HTTP_302_FO "HTTP/1.0 302 Found\r\n"
-#define HTTP_400_BR "HTTP/1.0 400 Bad Request\r\n"
-#define HTTP_404_NF "HTTP/1.0 404 Not Found\r\n"
-#define HTTP_411_LR "HTTP/1.0 411 Length Required\r\n"
-#define HTTP_413_TL "HTTP/1.0 413 Request Entity Too Large\r\n"
-#define HTTP_503_SU "HTTP/1.0 503 Service Unavailable\r\n"
-#define CONN_CLOSE  "Connection: close\r\n"
-/*---------------------------------------------------------------------------*/
-static const char http_content_type_html[] = "text/html";
-static const char http_content_type_plain[] = "text/plain";
-/*---------------------------------------------------------------------------*/
-/* Page template */
- static const char http_header_200[] = HTTP_200_OK;
- static const char http_header_302[] = HTTP_302_FO;
- static const char http_header_400[] = HTTP_400_BR;
- static const char http_header_404[] = HTTP_404_NF;
- static const char http_header_411[] = HTTP_411_LR;
- static const char http_header_413[] = HTTP_413_TL;
- static const char http_header_503[] = HTTP_503_SU;
-
+ // TODO: apagar?
 typedef struct httpd_simple_post_handler {
   struct httpd_simple_post_handler *next;
   int (*handler)(char *key, int key_len, char *val, int val_len);
@@ -104,9 +70,9 @@ typedef struct httpd_simple_post_handler {
 typedef struct http_response_t {
 	char buf[HTTPD_SIMPLE_MAIN_BUF_SIZE];
 	int blen;
-	char * content_type;
+	const char * content_type;
 	uint16_t content_length;
-	char * status;
+	const char * status;
 	char imediate_response;
 } http_response;
 
@@ -121,10 +87,10 @@ typedef struct  {
   const char **ptr;
   int content_length;
 
-  size_t complete_uri_len; 						/*!< uri-length >*/
+  size_t complete_uri_len; 				/*!< complete_uri length >*/
   size_t uri_len;
-  char *uri; 							/* uri-name */
-  char complete_uri[MAX_URI_LEN]; 		/* uri-name */
+  char *uri; 							/* pointer to 'complete_uri' */
+  char complete_uri[MAX_URI_LEN]; 		/* complete_uri- with query */
   const char* uri_query;
   size_t uri_query_len;
   int blen;

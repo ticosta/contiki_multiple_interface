@@ -39,16 +39,10 @@
 #include "contiki.h"
 #include "net/ip/uip.h"
 #include "net/ipv6/uip-ds6-route.h"
-//#include "batmon-sensor.h"
-//#include "lib/sensors.h"
 #include "lib/list.h"
-//#include "cc26xx-web-demo.h"
-//#include "mqtt-client.h"
-//#include "net-uart.h"
 
 #include <stdint.h>
 #include <string.h>
-//#include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -58,6 +52,7 @@
 #include "coap_client.h"
 #include "er-coap-constants.h"
 
+#include "httpd.h"
 #include "er-http.h"
 
 #define DEBUG 1
@@ -89,7 +84,7 @@
 #define PARSE_POST_STATE_MORE            1
 #define PARSE_POST_STATE_READING_KEY     2
 #define PARSE_POST_STATE_READING_VAL     3
-#define PARSE_POST_STATE_ERROR  0xFFFFFFFF
+#define PARSE_POST_STATE_ERROR 0xFFFFFFFF
 /*---------------------------------------------------------------------------*/
 /*
  * We can only handle a single POST request at a time. Since a second POST
@@ -103,15 +98,6 @@
 /*---------------------------------------------------------------------------*/
 PROCESS(httpd_process, "Web Server");
 /*---------------------------------------------------------------------------*/
-#define ISO_nl        0x0A
-#define ISO_space     0x20
-#define ISO_slash     0x2F
-#define ISO_amp       0x26
-#define ISO_column    0x3A
-#define ISO_equal     0x3D
-/*---------------------------------------------------------------------------*/
-
-
 static const char http_get[] = "GET ";
 static const char http_post[] = "POST ";
 static const char http_put[] = "PUT ";
@@ -295,8 +281,10 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 					  s,
 					  http_header_302,
 					  s->response.content_type,
-					  NULL,
-					  http_header_con_close
+					  //s->response.buf,
+					  // TODO
+					  "/index",
+					  NULL
 			  )
 	  	  );
     } else if(s->return_code == RETURN_CODE_LR) {
@@ -385,6 +373,7 @@ PT_THREAD(handle_input(httpd_state *s))
 
   PSOCK_READTO(&s->sin, ISO_space);
 
+  /* ---------------------------- Handle GET ---------------------------- */
   if(strncasecmp(s->inputbuf, http_get, 4) == 0) {
 
 	PRINTF("***** handle_input: GET *******\n");
@@ -413,7 +402,7 @@ PT_THREAD(handle_input(httpd_state *s))
 		PSOCK_CLOSE_EXIT(&s->sin);
 	}
 
-
+  /* ---------------------------- Handle POST ---------------------------- */
   } else if(strncasecmp(s->inputbuf, http_post, 5) == 0) {
 
 	PRINTF("***** handle_input: POST *******\n");
@@ -424,10 +413,26 @@ PT_THREAD(handle_input(httpd_state *s))
 		PSOCK_CLOSE_EXIT(&s->sin);
 	}
 
-	s->uri_len = PSOCK_DATALEN(&s->sin) - 1; // we remove the space at the end
-	memcpy(&s->uri, &s->inputbuf, s->uri_len);
 
-    s->inputbuf[PSOCK_DATALEN(&s->sin) - 1] = 0;
+	s->complete_uri_len = PSOCK_DATALEN(&s->sin) - 1; // we remove the space at the end
+	memcpy(&s->complete_uri, &s->inputbuf, s->complete_uri_len);
+	s->complete_uri[s->complete_uri_len] = '\0';
+
+	s->uri = s->complete_uri;
+	s->uri_query = strstr(s->complete_uri, "?");
+
+	if(s->uri_query != NULL){
+		/* move forward one byte uri_query to remove '?' */
+		s->uri_query++;
+	    s->uri_len = s->uri_query - s->complete_uri - 1; /* -1 to remove '?' from complete_uri */
+	    s->uri_query_len = s->complete_uri_len - s->uri_len;
+	}
+	else{
+	    s->uri_query_len = 0;
+	    s->uri_len = s->complete_uri_len;
+	}
+
+    //s->inputbuf[PSOCK_DATALEN(&s->sin) - 1] = ISO_null_term;
 
 
     /* POST: Read out the rest of the line and ignore it */
@@ -449,7 +454,6 @@ PT_THREAD(handle_input(httpd_state *s))
       if((PSOCK_DATALEN(&s->sin) > 14) &&
          strncasecmp(s->inputbuf, "Content-Length:", 15) == 0) {
         char *val_start = &s->inputbuf[15];
-        PRINTF("INPUTBUF: %s\n", s->inputbuf);
         s->content_length = atoi(val_start);
 
         /* So far so good */
@@ -500,8 +504,9 @@ PT_THREAD(handle_input(httpd_state *s))
 
     }
 
+    // TODO: retirar isto e ver se dá barraca...
     if(s->content_length > 0)
-    	*(++ptr_toWrite) = '\0';
+    	*(++ptr_toWrite) = ISO_null_term;
 
     //
     s->content_length = s->response.content_length;
@@ -509,9 +514,11 @@ PT_THREAD(handle_input(httpd_state *s))
 
     //TODO: ver isto
     //lock_release(s);
+
+  /* ---------------------------- Handle PUT ---------------------------- */
   } else if(strncasecmp(s->inputbuf, http_put, 4) == 0){
 
-	  PRINTF("***** handle_input: PUT *******\n\n");
+	  PRINTF("***** handle_input: PUT - UNIMPLEMENTED YET! *******\n\n");
 
   }else {
     PSOCK_CLOSE_EXIT(&s->sin);

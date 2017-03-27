@@ -7,6 +7,7 @@
 
 #include "contiki.h"
 
+#include "httpd.h"
 #include "er-http.h"
 #include "er-coap.h"   // TODO: Esta aqui só para as constantes e enums no rest interface
 
@@ -51,8 +52,11 @@ rest_resource_flags_t http_get_rest_method(void *request) {
 int http_set_status_code(void *response, unsigned int code) {
     httpd_state *const http_pkt = (httpd_state *)response;
 
-    // TODO
-    http_pkt->response.status = http_header_200;
+    switch(code) {
+    case 4:
+    	//http_pkt->response.status = http_header_200;
+    	break;
+    }
 
 	return 1;
 }
