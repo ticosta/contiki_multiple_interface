@@ -115,6 +115,13 @@ PROCESS(httpd_process, "Web Server");
 static const char http_get[] = "GET ";
 static const char http_post[] = "POST ";
 static const char http_put[] = "PUT ";
+/*---------------------------------------------------------------------------*/
+static const char *NOT_FOUND = "<html><body bgcolor=\"white\">"
+                               "<center>"
+                               "<h1>404 - File Not Found</h1>"
+                               "</center>"
+                               "</body>"
+                               "</html>";
 
 static const char *http_header_srv_str[] = {
   "Server: Contiki, ",
@@ -163,9 +170,6 @@ PT_THREAD(enqueue_chunk(httpd_state *s, uint8_t immediate,
   s->tmp_buf_len = vsnprintf(s->tmp_buf, TMP_BUF_SIZE, format, ap);
 
   va_end(ap);
-
-  //PRINTF("********************* Enqueue Chunk blen: %d\n", s->blen);
-  //PRINTF("********************* Enqueue Chunk tmp_buf_len: %d\n", s->tmp_buf_len);
 
   if(s->blen + s->tmp_buf_len < HTTPD_SIMPLE_MAIN_BUF_SIZE) {
     /* Enough space for the entire chunk. Copy over */
@@ -264,6 +268,20 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
   /*PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
                          const char *content_type, const char *redir,
                          const char **additional))*/
+
+  /* Send a Not Found status */
+  if(!resourse_found) {
+      PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_404,
+                                                http_content_type_html,
+                                                NULL,
+                                                http_header_con_close));
+
+      PT_WAIT_THREAD(&s->outputpt,
+                     send_string(s, NOT_FOUND));
+      uip_close();
+      PT_EXIT(&s->outputpt);
+  }
+
   if(s->request_type == REQUEST_TYPE_POST) {
 	  PRINTF("***** METHOD POST *******\n");
 	  //TODO ver como e que lidadmos com esta resposta
@@ -276,7 +294,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_302,
-					  s->response.content_type, //TODO: passar a char o content_type
+					  s->response.content_type,
 					  NULL,
 					  http_header_con_close
 			  )
@@ -333,57 +351,31 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
   } else if(s->request_type == REQUEST_TYPE_GET) {
 	  PRINTF("***** METHOD GET *******\n");
 	  PRINTF("Content-Type: %s\n", s->response.content_type);
-	  if(resourse_found) {
-    	PRINTF("***** Resource Found!\n");
-        PT_WAIT_THREAD(
-        		&s->outputpt,
-				send_headers(
-						s,
-						s->response.status_str,
-						s->response.content_type,
-						NULL,
-						http_header_con_close
-					)
-				);
-        /*if(s->response.status >= 200 && s->response.status <= 299){
-            PT_WAIT_THREAD(&s->outputpt,
-                           enqueue_chunk(
-                                   s,
-                                   1,
-                                   s->response.buf
-                               )
-                           );
-        }else{
-            uip_close();
-            PT_EXIT(&s->outputpt);
-        }*/
+	  PRINTF("Status Str: %s\n", s->response.status);
 
-	  }/*else {
-		PT_WAIT_THREAD(
-				&s->outputpt,
-				send_headers(
-						s,
-						s->response.status_str,
-						s->response.content_type,
-						NULL,
-						http_header_con_close
-					)
-				);
+	  /* Send Headers */
+	  PT_WAIT_THREAD(
+			  &s->outputpt,
+			  send_headers(
+					  s,
+					  s->response.status,
+					  s->response.content_type,
+					  NULL,
+					  http_header_con_close
+			  ));
 
-	  }*/
-
+	/* Send response body */
+	PT_WAIT_THREAD(&s->outputpt, send_string(s, s->response.buf));
+//	PT_WAIT_THREAD(
+//			&s->outputpt,
+//			enqueue_chunk(s, 1, s->response.buf)
+//			);
   }
 
   PSOCK_CLOSE(&s->sout);
   PT_END(&s->outputpt);
 }
 
-/*
- *
- *
- *
- */
-/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static char * ptr_toWrite;
 static
@@ -404,22 +396,22 @@ PT_THREAD(handle_input(httpd_state *s))
 	s->complete_uri[s->complete_uri_len] = '\0';
 
 	s->uri = s->complete_uri;
-	s->uri_query = strstr(s->complete_uri, "?") + 1;
+	s->uri_query = strstr(s->complete_uri, "?");
 
 	if(s->uri_query != NULL){
-	    s->uri_len = s->uri_query - s->complete_uri - 1;
-	    s->uri_query_len = s->complete_uri_len - s->uri_len - 1;
+		/* move forward one byte uri_query to remove '?' */
+		s->uri_query++;
+	    s->uri_len = s->uri_query - s->complete_uri - 1; /* -1 to remove '?' from complete_uri */
+	    s->uri_query_len = s->complete_uri_len - s->uri_len;
 	}
 	else{
 	    s->uri_query_len = 0;
 	    s->uri_len = s->complete_uri_len;
 	}
 
-
 	if(s->inputbuf[0] != ISO_slash) {
 		PSOCK_CLOSE_EXIT(&s->sin);
 	}
-
 
 
   } else if(strncasecmp(s->inputbuf, http_post, 5) == 0) {
@@ -540,23 +532,17 @@ handle_connection(httpd_state *s)
   handle_input(s);
   if(s->state == STATE_OUTPUT) {
 	rest_select_if(HTTP_IF);
+	/* By default, all endpoints have an immediate response */
+	s->response.imediate_response = 1;
 
+	PRINTF("\n** Calling Service Callback\n");
 	int res_found = service_cbk(s, &s->response, (uint8_t *)&s->response.buf, 0, 0);
 
-	PRINTF("(handle_connection) State: %d   ------------   res_found = %d\n", s->return_code, res_found);
+	PRINTF("\n** State: %d, res_found = %d, Immediate: %d\n", s->return_code, res_found, s->response.imediate_response);
 
 	if(s->response.imediate_response){
 	    handle_output(s, res_found);
 	}
-
-//	PRINTF("\n||||||||||||||||||||||||||||||||||||||||||||||||||||||| Resource Found: %d\n", res_found);
-//	PRINTF("||||||||||||||||||||||||||||||||||||||||||||||||||||||| LEN: %d\n", s->response.blen);
-//	int i;
-//	for(i = 0; i < s->response.blen; i++) {
-//		PRINTF("%c", s->response.buf[i]);
-//	}
-//	PRINTF("\n|||||||||||||||||||||||||||||||||||||||||||||||||||||||\n\n");
-
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -569,14 +555,14 @@ parse_coap(coap_client_request_t *coap_request, httpd_state *s){
     }
     //s->response.status = coap_request->status_code;
     //TODO: nao esquecer
-    if(coap_request->status_code == CONTENT_2_05){
-        s->response.status = 200;
-    }
+//    if(coap_request->status_code == CONTENT_2_05){
+//        s->response.status = 200;
+//    }
     s->request_type = coap_request->method;
 
     //TODO: pode nao ser 200
-    s->response.status_str = http_header_200;
-    memcpy(s->response.content_type, "text/plain", strlen("text/plain"));
+    s->response.status = http_header_200;
+    s->response.content_type = http_content_type_plain;
     //s->return_code = coap_requ TODO:
 
     s->currentConnection = coap_request->connection;

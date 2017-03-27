@@ -79,8 +79,8 @@
 #define HTTP_503_SU "HTTP/1.0 503 Service Unavailable\r\n"
 #define CONN_CLOSE  "Connection: close\r\n"
 /*---------------------------------------------------------------------------*/
-#define CONTENT_OPEN  "<pre>"
-#define CONTENT_CLOSE "</pre>"
+static const char http_content_type_html[] = "text/html";
+static const char http_content_type_plain[] = "text/plain";
 /*---------------------------------------------------------------------------*/
 /* Page template */
  static const char http_header_200[] = HTTP_200_OK;
@@ -104,10 +104,9 @@ typedef struct httpd_simple_post_handler {
 typedef struct http_response_t {
 	char buf[HTTPD_SIMPLE_MAIN_BUF_SIZE];
 	int blen;
-	char content_type[50];
+	char * content_type;
 	uint16_t content_length;
-	unsigned int status;
-	char * status_str;
+	char * status;
 	char imediate_response;
 } http_response;
 

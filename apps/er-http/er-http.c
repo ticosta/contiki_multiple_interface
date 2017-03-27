@@ -51,9 +51,10 @@ rest_resource_flags_t http_get_rest_method(void *request) {
 int http_set_status_code(void *response, unsigned int code) {
     httpd_state *const http_pkt = (httpd_state *)response;
 
-    http_pkt->response.status = code;
+    // TODO
+    http_pkt->response.status = http_header_200;
 
-	return http_pkt->response.status;
+	return 1;
 }
 
 /** Get the content-type of a request. */
@@ -66,11 +67,12 @@ int http_get_header_content_type(void *request,
 }
 
 /** Set the Content-Type of a response. */
-int http_set_header_content_type(void *response,
+int http_set_header_content_type(void *request,
 							 unsigned int content_type) {
-	httpd_state *const http_pkt = (httpd_state *)response;
+	httpd_state *const http_pkt = (httpd_state *)request;
 
-	memcpy(http_pkt->response.content_type, "text/plain", strlen("text/plain"));
+	// TODO:
+	http_pkt->response.content_type = "text/plain";
 
 	return 1;
 }
@@ -159,13 +161,13 @@ int http_get_payload(void *request, const uint8_t **payload) {
 }
 
 /** Set the payload option of a response. */
-int http_set_payload(void *response, const void *payload,
+int http_set_payload(void *request, const void *payload,
 						  size_t length) {
-	http_response *rsp = (http_response *)response;
+	httpd_state *const http_pkt = (httpd_state *)request;
 
-	rsp->blen = MIN(REST_MAX_CHUNK_SIZE, length);
-	memcpy(rsp->buf, payload, rsp->blen);
-	return rsp->blen;
+	http_pkt->response.blen = MIN(REST_MAX_CHUNK_SIZE, length);
+	memcpy(http_pkt->response.buf, payload, http_pkt->response.blen);
+	return http_pkt->response.blen;
 }
 
 /** Get the query string of a request. */
