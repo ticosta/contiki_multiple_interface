@@ -391,7 +391,7 @@ PT_THREAD(send_string(httpd_state *s, const char *str))
 
 static
 PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
-                       const char *content_type, const char *redir,
+                       const uint16_t content_type, const char *redir,
                        const char **additional))
 {
   PT_BEGIN(&s->generate_pt);
@@ -442,7 +442,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_302,
-					  (char *)s->response.content_type, //TODO: passar a char o content_type
+					  s->response.content_type, //TODO: passar a char o content_type
 					  NULL,
 					  NULL
 			  )
@@ -452,7 +452,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
     		  &s->outputpt,
 			  send_headers(
 					  s, http_header_411,
-					  (char *)s->response.content_type,
+					  s->response.content_type,
 					  NULL,
 					  http_header_con_close
 				  )
@@ -464,7 +464,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_413,
-					  (char *)s->response.content_type,
+					  s->response.content_type,
 					  NULL,
 					  http_header_con_close
 				  )
@@ -476,7 +476,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_503,
-					  (char *)s->response.content_type,
+					  s->response.content_type,
 					  NULL,
 					  http_header_con_close
 				  )
@@ -488,7 +488,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_400,
-					  (char *)s->response.content_type,
+					  s->response.content_type,
 					  NULL,
 					  http_header_con_close
 				  )
@@ -505,7 +505,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 				send_headers(
 						s,
 						http_header_200,
-						(char *)s->response.content_type,
+						s->response.content_type,
 						NULL,
 						http_header_con_close
 					)
@@ -524,7 +524,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 				send_headers(
 						s,
 						http_header_404,
-						(char *)s->response.content_type,
+						s->response.content_type,
 						NULL,
 						http_header_con_close
 					)
