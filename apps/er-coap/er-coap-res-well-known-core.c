@@ -117,7 +117,7 @@ well_known_core_get_handler(void *request, void *response, uint8_t *buffer,
       resource = resource->next) {
 #if COAP_LINK_FORMAT_FILTERING
     /* Filtering */
-    if(len) {
+    if(len && resource->type == 0) {
       if(strcmp(filter, "href") == 0) {
         attrib = strstr(resource->url, value);
         if(attrib == NULL || (value[-1] == '/' && attrib != resource->url)) {
@@ -158,27 +158,28 @@ well_known_core_get_handler(void *request, void *response, uint8_t *buffer,
       PRINTF("Filter: res has match\n");
     }
 #endif
+    if(resource->type == 0){
+		PRINTF("res: /%s (%p)\npos: s%zu, o%ld, b%zu\n", resource->url, resource,
+			   strpos, (long)*offset, bufpos);
 
-    PRINTF("res: /%s (%p)\npos: s%zu, o%ld, b%zu\n", resource->url, resource,
-           strpos, (long)*offset, bufpos);
+		if(strpos > 0) {
+		  ADD_CHAR_IF_POSSIBLE(',');
+		}
+		ADD_CHAR_IF_POSSIBLE('<');
+		ADD_CHAR_IF_POSSIBLE('/');
+		ADD_STRING_IF_POSSIBLE(resource->url, >=);
+		ADD_CHAR_IF_POSSIBLE('>');
 
-    if(strpos > 0) {
-      ADD_CHAR_IF_POSSIBLE(',');
-    }
-    ADD_CHAR_IF_POSSIBLE('<');
-    ADD_CHAR_IF_POSSIBLE('/');
-    ADD_STRING_IF_POSSIBLE(resource->url, >=);
-    ADD_CHAR_IF_POSSIBLE('>');
+		if(resource->attributes != NULL && resource->attributes[0]) {
+		  ADD_CHAR_IF_POSSIBLE(';');
+		  ADD_STRING_IF_POSSIBLE(resource->attributes, >);
+		}
 
-    if(resource->attributes != NULL && resource->attributes[0]) {
-      ADD_CHAR_IF_POSSIBLE(';');
-      ADD_STRING_IF_POSSIBLE(resource->attributes, >);
-    }
-
-    /* buffer full, but resource not completed yet; or: do not break if resource exactly fills buffer. */
-    if(bufpos > preferred_size && strpos - bufpos > *offset) {
-      PRINTF("res: BREAK at %s (%p)\n", resource->url, resource);
-      break;
+		/* buffer full, but resource not completed yet; or: do not break if resource exactly fills buffer. */
+		if(bufpos > preferred_size && strpos - bufpos > *offset) {
+		  PRINTF("res: BREAK at %s (%p)\n", resource->url, resource);
+		  break;
+		}
     }
   }
 

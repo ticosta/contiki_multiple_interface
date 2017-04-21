@@ -438,7 +438,7 @@ PT_THREAD(coap_blocking_request
 /*---------------------------------------------------------------------------*/
 /*- REST Engine Interface ---------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-const struct rest_implementation coap_rest_implementation = {
+struct rest_implementation coap_rest_implementation = {
   "CoAP-18",
 
   coap_init_engine,

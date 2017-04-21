@@ -51,11 +51,27 @@
 //#include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <stddef.h>
 #include <ctype.h>
+#include "debug.h"
 
-#include "httpd.h"
+#include "er-http.h"
+
+#define DEBUG 1
+#if DEBUG
+#define PRINTF(...) printf(__VA_ARGS__)
+#define PRINT6ADDR(addr) PRINTF("[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7], ((uint8_t *)addr)[8], ((uint8_t *)addr)[9], ((uint8_t *)addr)[10], ((uint8_t *)addr)[11], ((uint8_t *)addr)[12], ((uint8_t *)addr)[13], ((uint8_t *)addr)[14], ((uint8_t *)addr)[15])
+#define PRINTLLADDR(lladdr) PRINTF("[%02x:%02x:%02x:%02x:%02x:%02x]", (lladdr)->addr[0], (lladdr)->addr[1], (lladdr)->addr[2], (lladdr)->addr[3], (lladdr)->addr[4], (lladdr)->addr[5])
+#else
+#define PRINTF(...)
+#define PRINT6ADDR(addr)
+#define PRINTLLADDR(addr)
+#endif
+
+#define HTTPD_SIMPLE_POST_HANDLER_OK      1
+#define HTTPD_SIMPLE_POST_HANDLER_UNKNOWN 0
+#define HTTPD_SIMPLE_POST_HANDLER_ERROR   0xFFFFFFFF
+
 /*---------------------------------------------------------------------------*/
 #define SEND_STRING(s, str) PSOCK_SEND(s, (uint8_t *)str, strlen(str))
 /*---------------------------------------------------------------------------*/
@@ -89,16 +105,7 @@ static char val_escaped[PARSE_POST_BUF_SIZES];
 static char val[PARSE_POST_BUF_SIZES];
 static int key_len;
 static int val_len;
-static int state;
-/*---------------------------------------------------------------------------*/
-/* Stringified min/max intervals */
-#define STRINGIFY(x) XSTR(x)
-#define XSTR(x)      #x
-
-#define RSSI_INT_MAX STRINGIFY(CC26XX_WEB_DEMO_RSSI_MEASURE_INTERVAL_MAX)
-#define RSSI_INT_MIN STRINGIFY(CC26XX_WEB_DEMO_RSSI_MEASURE_INTERVAL_MIN)
-#define PUB_INT_MAX  STRINGIFY(MQTT_CLIENT_PUBLISH_INTERVAL_MAX)
-#define PUB_INT_MIN  STRINGIFY(MQTT_CLIENT_PUBLISH_INTERVAL_MIN)
+static long state;
 /*---------------------------------------------------------------------------*/
 /*
  * We can only handle a single POST request at a time. Since a second POST
@@ -109,9 +116,9 @@ static int state;
  * a POST request. We maintain a global lock which is either NULL or points
  * to the http conn which currently has the lock
  */
-static struct httpd_state *lock;
+static httpd_state *lock;
 /*---------------------------------------------------------------------------*/
-PROCESS(httpd_process, "CC26XX Web Server");
+PROCESS(httpd_process, "Web Server");
 /*---------------------------------------------------------------------------*/
 #define ISO_nl        0x0A
 #define ISO_space     0x20
@@ -129,10 +136,6 @@ PROCESS(httpd_process, "CC26XX Web Server");
 #define HTTP_503_SU "HTTP/1.0 503 Service Unavailable\r\n"
 #define CONN_CLOSE  "Connection: close\r\n"
 /*---------------------------------------------------------------------------*/
-#define SECTION_TAG   "div"
-#define SECTION_OPEN  "<" SECTION_TAG ">"
-#define SECTION_CLOSE "</" SECTION_TAG ">"
-
 #define CONTENT_OPEN  "<pre>"
 #define CONTENT_CLOSE "</pre>"
 /*---------------------------------------------------------------------------*/
@@ -141,15 +144,8 @@ PROCESS(httpd_process, "CC26XX Web Server");
 /*---------------------------------------------------------------------------*/
 #define BOARD_STRING "-WISMOTE-"
 
-static const char *NOT_FOUND = "<html><body bgcolor=\"white\">"
-                               "<center>"
-                               "<h1>404 - file not found</h1>"
-                               "</center>"
-                               "</body>"
-                               "</html>";
 /*---------------------------------------------------------------------------*/
 /* Page template */
-static const char http_doctype[] = "<!DOCTYPE html>";
 static const char http_header_200[] = HTTP_200_OK;
 static const char http_header_302[] = HTTP_302_FO;
 static const char http_header_400[] = HTTP_400_BR;
@@ -157,10 +153,11 @@ static const char http_header_404[] = HTTP_404_NF;
 static const char http_header_411[] = HTTP_411_LR;
 static const char http_header_413[] = HTTP_413_TL;
 static const char http_header_503[] = HTTP_503_SU;
+
 static const char http_get[] = "GET ";
 static const char http_post[] = "POST ";
-static const char http_index_html[] = "/index.html";
-static const char http_html_start[] = "<html><head>";
+static const char http_put[] = "PUT ";
+
 static const char *http_header_srv_str[] = {
   "Server: Contiki, ",
   BOARD_STRING "\r\n",
@@ -171,69 +168,28 @@ static const char *http_header_con_close[] = {
   CONN_CLOSE,
   NULL
 };
+LIST(post_handlers);
+void
+httpd_simple_register_post_handler(httpd_simple_post_handler_t *h)
+{
+	PRINTF("Passei por aqui\n");
+  list_add(post_handlers, h);
+}
 
-static const char http_head_charset[] = "<meta charset=\"UTF-8\">";
-static const char http_title_start[] = "<title>";
-static const char http_title_end[] = "</title>";
-static const char http_head_end[] = "</head>";
-static const char http_body_start[] = "<body>";
-static const char http_bottom[] = "</body></html>";
 /*---------------------------------------------------------------------------*/
-static const char http_content_type_html[] = "text/html";
-static const char http_content_type_plain[] = "text/plain";
-/*---------------------------------------------------------------------------*/
-static char generate_index(struct httpd_state *s);
-/*---------------------------------------------------------------------------*/
-static page_t http_index_page = {
-  NULL,
-  "index.html",
-  "Index",
-  generate_index,
-};
-/*---------------------------------------------------------------------------*/
-static uint16_t numtimes;
 static const httpd_simple_post_handler_t *handler;
 /*---------------------------------------------------------------------------*/
 
-LIST(post_handlers);
-LIST(pages_list);
-MEMB(conns, struct httpd_state, CONNS);
+
+MEMB(conns, httpd_state, CONNS);
 /*---------------------------------------------------------------------------*/
 #define HEX_TO_INT(x)  (isdigit(x) ? x - '0' : x - 'W')
-
 
 static service_callback_t service_cbk = NULL;
 
 void http_set_service_callback(service_callback_t callback) {
 	service_cbk = callback;
 }
-
-int
-cc26xx_web_demo_ipaddr_sprintf(char *buf, uint8_t buf_len,
-                               const uip_ipaddr_t *addr)
-{
-  uint16_t a;
-  uint8_t len = 0;
-  int i, f;
-  for(i = 0, f = 0; i < sizeof(uip_ipaddr_t); i += 2) {
-    a = (addr->u8[i] << 8) + addr->u8[i + 1];
-    if(a == 0 && f >= 0) {
-      if(f++ == 0) {
-        len += snprintf(&buf[len], buf_len - len, "::");
-      }
-    } else {
-      if(f > 0) {
-        f = -1;
-      } else if(i > 0) {
-        len += snprintf(&buf[len], buf_len - len, ":");
-      }
-      len += snprintf(&buf[len], buf_len - len, "%x", a);
-    }
-  }
-
-  return len;
-}
-
 static size_t
 url_unescape(const char *src, size_t srclen, char *dst, size_t dstlen)
 {
@@ -259,14 +215,10 @@ url_unescape(const char *src, size_t srclen, char *dst, size_t dstlen)
   return i == srclen;
 }
 /*---------------------------------------------------------------------------*/
-void
-httpd_simple_register_post_handler(httpd_simple_post_handler_t *h)
-{
-  list_add(post_handlers, h);
-}
-/*---------------------------------------------------------------------------*/
+
+/* Envia Bocados */
 static
-PT_THREAD(enqueue_chunk(struct httpd_state *s, uint8_t immediate,
+PT_THREAD(enqueue_chunk(httpd_state *s, uint8_t immediate,
                         const char *format, ...))
 {
   va_list ap;
@@ -279,8 +231,8 @@ PT_THREAD(enqueue_chunk(struct httpd_state *s, uint8_t immediate,
 
   va_end(ap);
 
-  printf("********************* Enqueue Chunk blen: %d\n", s->blen);
-  printf("********************* Enqueue Chunk tmp_buf_len: %d\n", s->tmp_buf_len);
+  //PRINTF("********************* Enqueue Chunk blen: %d\n", s->blen);
+  //PRINTF("********************* Enqueue Chunk tmp_buf_len: %d\n", s->tmp_buf_len);
 
   if(s->blen + s->tmp_buf_len < HTTPD_SIMPLE_MAIN_BUF_SIZE) {
     /* Enough space for the entire chunk. Copy over */
@@ -306,137 +258,11 @@ PT_THREAD(enqueue_chunk(struct httpd_state *s, uint8_t immediate,
 
   PSOCK_END(&s->sout);
 }
-/*---------------------------------------------------------------------------*/
-static
-PT_THREAD(generate_top_matter(struct httpd_state *s, const char *title,
-                              const char **css))
-{
-
-  PT_BEGIN(&s->top_matter_pt);
-
-  PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, http_doctype));
-  PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, http_html_start));
-  PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, http_title_start));
-
-  PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, title));
-  PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, http_title_end));
-
-  if(css != NULL) {
-    for(s->ptr = css; *(s->ptr) != NULL; s->ptr++) {
-      PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, *(s->ptr)));
-    }
-  }
-
-  PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, http_head_charset));
-  PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, http_head_end));
-  PT_WAIT_THREAD(&s->top_matter_pt, enqueue_chunk(s, 0, http_body_start));
-
-  /* Links */
-  PT_WAIT_THREAD(&s->top_matter_pt,
-                 enqueue_chunk(s, 0, SECTION_OPEN "<p>"));
-
-  s->page = list_head(pages_list);
-  PT_WAIT_THREAD(&s->top_matter_pt,
-                 enqueue_chunk(s, 0, "[ <a href=\"%s\">%s</a> ]",
-                               s->page->filename, s->page->title));
-
-  for(s->page = s->page->next; s->page != NULL; s->page = s->page->next) {
-    PT_WAIT_THREAD(&s->top_matter_pt,
-                   enqueue_chunk(s, 0, " | [ <a href=\"%s\">%s</a> ]",
-                                 s->page->filename, s->page->title));
-  }
-
-  PT_WAIT_THREAD(&s->top_matter_pt,
-                 enqueue_chunk(s, 0, "</p>" SECTION_CLOSE));
-
-  PT_END(&s->top_matter_pt);
-}
-/*---------------------------------------------------------------------------*/
-static
-PT_THREAD(generate_index(struct httpd_state *s))
-{
-  char ipaddr_buf[IPADDR_BUF_LEN]; /* Intentionally on stack */
-
-  PT_BEGIN(&s->generate_pt);
-
-  /* Generate top matter (doctype, title, nav links etc) */
-  PT_WAIT_THREAD(&s->generate_pt,
-                 generate_top_matter(s, http_index_page.title, NULL));
-
-  /* ND Cache */
-  PT_WAIT_THREAD(&s->generate_pt,
-                 enqueue_chunk(s, 0, SECTION_OPEN "Neighbors" CONTENT_OPEN));
-
-  for(s->nbr = nbr_table_head(ds6_neighbors); s->nbr != NULL;
-      s->nbr = nbr_table_next(ds6_neighbors, s->nbr)) {
-
-    PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, "\n"));
-
-    memset(ipaddr_buf, 0, IPADDR_BUF_LEN);
-    cc26xx_web_demo_ipaddr_sprintf(ipaddr_buf, IPADDR_BUF_LEN, &s->nbr->ipaddr);
-    PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, "%s", ipaddr_buf));
-  }
-
-  PT_WAIT_THREAD(&s->generate_pt,
-                 enqueue_chunk(s, 0, CONTENT_CLOSE SECTION_CLOSE));
-
-  /* Default Route */
-  PT_WAIT_THREAD(&s->generate_pt,
-                 enqueue_chunk(s, 0,
-                               SECTION_OPEN "Default Route" CONTENT_OPEN));
-
-  memset(ipaddr_buf, 0, IPADDR_BUF_LEN);
-  cc26xx_web_demo_ipaddr_sprintf(ipaddr_buf, IPADDR_BUF_LEN,
-                                 uip_ds6_defrt_choose());
-  PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, "%s", ipaddr_buf));
-
-  PT_WAIT_THREAD(&s->generate_pt,
-                 enqueue_chunk(s, 0, CONTENT_CLOSE SECTION_CLOSE));
-
-  /* Routes */
-  PT_WAIT_THREAD(&s->generate_pt,
-                 enqueue_chunk(s, 0, SECTION_OPEN "Routes" CONTENT_OPEN));
-
-  for(s->r = uip_ds6_route_head(); s->r != NULL;
-      s->r = uip_ds6_route_next(s->r)) {
-    PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, "\n"));
-
-    memset(ipaddr_buf, 0, IPADDR_BUF_LEN);
-    cc26xx_web_demo_ipaddr_sprintf(ipaddr_buf, IPADDR_BUF_LEN, &s->r->ipaddr);
-    PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, "%s", ipaddr_buf));
-
-    PT_WAIT_THREAD(&s->generate_pt,
-                   enqueue_chunk(s, 0, " / %u via ", s->r->length));
-
-    memset(ipaddr_buf, 0, IPADDR_BUF_LEN);
-    cc26xx_web_demo_ipaddr_sprintf(ipaddr_buf, IPADDR_BUF_LEN,
-                                   uip_ds6_route_nexthop(s->r));
-    PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, "%s", ipaddr_buf));
-
-    PT_WAIT_THREAD(&s->generate_pt,
-                   enqueue_chunk(s, 0,
-                                 ", lifetime=%lus", s->r->state.lifetime));
-  }
-
-  PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0,
-                                                CONTENT_CLOSE SECTION_CLOSE));
 
 
-  /* Footer */
-  PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, SECTION_OPEN));
-  PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, "Page hits: %u<br>",
-                                                ++numtimes));
-  PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, "Uptime: %lu secs<br>",
-                                                clock_seconds()));
-  PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 0, SECTION_CLOSE));
-
-  PT_WAIT_THREAD(&s->generate_pt, enqueue_chunk(s, 1, http_bottom));
-
-  PT_END(&s->generate_pt);
-}
 /*---------------------------------------------------------------------------*/
 static void
-lock_obtain(struct httpd_state *s)
+lock_obtain(httpd_state *s)
 {
   if(lock == NULL) {
     lock = s;
@@ -444,7 +270,7 @@ lock_obtain(struct httpd_state *s)
 }
 /*---------------------------------------------------------------------------*/
 static void
-lock_release(struct httpd_state *s)
+lock_release(httpd_state *s)
 {
   if(lock == s) {
     lock = NULL;
@@ -454,6 +280,7 @@ lock_release(struct httpd_state *s)
 static void
 parse_post_request_chunk(char *buf, int buf_len, int last_chunk)
 {
+
   int i;
   int finish;
 
@@ -547,25 +374,12 @@ parse_post_request_chunk(char *buf, int buf_len, int last_chunk)
       break;
     }
   }
-}
-/*---------------------------------------------------------------------------*/
-static httpd_simple_script_t
-get_script(const char *name)
-{
-  page_t *page;
-
-  for(page = list_head(pages_list); page != NULL;
-      page = list_item_next(page)) {
-    if(strncmp(name, page->filename, strlen(page->filename)) == 0) {
-      return page->script;
-    }
-  }
-
-  return NULL;
+  //(char *buf, int buf_len, int last_chunk)
+  PRINTF("Fim do Post! => chave=%s <-> valor=%s || length = %d || state = %ld\n", key, val, buf_len, state);
 }
 /*---------------------------------------------------------------------------*/
 static
-PT_THREAD(send_string(struct httpd_state *s, const char *str))
+PT_THREAD(send_string(httpd_state *s, const char *str))
 {
   PSOCK_BEGIN(&s->sout);
 
@@ -573,9 +387,9 @@ PT_THREAD(send_string(struct httpd_state *s, const char *str))
 
   PSOCK_END(&s->sout);
 }
-/*---------------------------------------------------------------------------*/
+
 static
-PT_THREAD(send_headers(struct httpd_state *s, const char *statushdr,
+PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
                        const char *content_type, const char *redir,
                        const char **additional))
 {
@@ -606,92 +420,130 @@ PT_THREAD(send_headers(struct httpd_state *s, const char *statushdr,
   PT_END(&s->generate_pt);
 }
 /*---------------------------------------------------------------------------*/
+
 static
-PT_THREAD(handle_output(struct httpd_state *s, int resourse_found))
+PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 {
   PT_BEGIN(&s->outputpt);
 
-  s->script = NULL;
-
-  PT_INIT(&s->generate_pt);
-  PT_INIT(&s->top_matter_pt);
-
+  PT_INIT(&s->generate_pt); /* TODO ver isso */
+  /*PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
+                         const char *content_type, const char *redir,
+                         const char **additional))*/
   if(s->request_type == REQUEST_TYPE_POST) {
+	  PRINTF("***** METHOD POST *******\n");
+	  //TODO ver como e que lidadmos com esta resposta
+	  PRINTF("Return Code: %d\n", s->return_code);
     if(s->return_code == RETURN_CODE_OK) {
-      PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_302,
-                                                http_content_type_plain,
-                                                s->filename,
-                                                NULL));
+    	/* TODO: Neste caso temos que dar um novo sitio para redirecionar */
+      PT_WAIT_THREAD(
+    		  &s->outputpt,
+			  send_headers(
+					  s,
+					  http_header_302,
+					  (char *)s->response.content_type, //TODO: passar a char o content_type
+					  NULL,
+					  NULL
+			  )
+	  	  );
     } else if(s->return_code == RETURN_CODE_LR) {
-      PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_411,
-                                                http_content_type_plain,
-                                                NULL,
-                                                http_header_con_close));
+      PT_WAIT_THREAD(
+    		  &s->outputpt,
+			  send_headers(
+					  s, http_header_411,
+					  (char *)s->response.content_type,
+					  NULL,
+					  http_header_con_close
+				  )
+			  );
       PT_WAIT_THREAD(&s->outputpt, send_string(s, "Content-Length Required\n"));
     } else if(s->return_code == RETURN_CODE_TL) {
-      PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_413,
-                                                http_content_type_plain,
-                                                NULL,
-                                                http_header_con_close));
+      PT_WAIT_THREAD(
+    		  &s->outputpt,
+			  send_headers(
+					  s,
+					  http_header_413,
+					  (char *)s->response.content_type,
+					  NULL,
+					  http_header_con_close
+				  )
+			  );
       PT_WAIT_THREAD(&s->outputpt, send_string(s, "Content-Length too Large\n"));
     } else if(s->return_code == RETURN_CODE_SU) {
-      PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_503,
-                                                http_content_type_plain,
-                                                NULL,
-                                                http_header_con_close));
+      PT_WAIT_THREAD(
+    		  &s->outputpt,
+			  send_headers(
+					  s,
+					  http_header_503,
+					  (char *)s->response.content_type,
+					  NULL,
+					  http_header_con_close
+				  )
+			  );
       PT_WAIT_THREAD(&s->outputpt, send_string(s, "Service Unavailable\n"));
     } else {
-      PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_400,
-                                                http_content_type_plain,
-                                                NULL,
-                                                http_header_con_close));
+      PT_WAIT_THREAD(
+    		  &s->outputpt,
+			  send_headers(
+					  s,
+					  http_header_400,
+					  (char *)s->response.content_type,
+					  NULL,
+					  http_header_con_close
+				  )
+			  );
       PT_WAIT_THREAD(&s->outputpt, send_string(s, "Bad Request\n"));
     }
   } else if(s->request_type == REQUEST_TYPE_GET) {
-	  printf("***** GET\n");
-	  s->script = get_script(&s->filename[1]);
-
-	  // File not found
-    if(s->script != NULL) {
-        PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_200,
-                                                  http_content_type_html,
-                                                  NULL,
-                                                  http_header_con_close));
-        PT_WAIT_THREAD(&s->outputpt, s->script(s));
-    } else if(resourse_found) {
-    	printf("***** Resourse Found!\n");
-    	// TODO: passar a utilizar o content-type que está no "s"
-        PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_200,
-                                                  http_content_type_html,
-                                                  NULL,
-                                                  http_header_con_close));
+	  PRINTF("***** METHOD GET *******\n");
+	  PRINTF("Content-Type: %d\n", s->response.content_type);
+	  if(resourse_found) {
+    	PRINTF("***** Resource Found!\n");
+        PT_WAIT_THREAD(
+        		&s->outputpt,
+				send_headers(
+						s,
+						http_header_200,
+						(char *)s->response.content_type,
+						NULL,
+						http_header_con_close
+					)
+				);
         PT_WAIT_THREAD(&s->outputpt,
-                       enqueue_chunk(s, 1, s->response.buf));
+                       enqueue_chunk(
+                    		   s,
+							   1,
+							   s->response.buf
+						   )
+					   );
 
-    }else {
-		strncpy(s->filename, "/notfound.html", sizeof(s->filename));
-		PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_404,
-												http_content_type_html,
-												NULL,
-												http_header_con_close));
-		PT_WAIT_THREAD(&s->outputpt,
-					 send_string(s, NOT_FOUND));
+	  }else {
+		PT_WAIT_THREAD(
+				&s->outputpt,
+				send_headers(
+						s,
+						http_header_404,
+						(char *)s->response.content_type,
+						NULL,
+						http_header_con_close
+					)
+				);
+		/*PT_WAIT_THREAD(&s->outputpt,
+					 send_string(s, NOT_FOUND));*/
 		uip_close();
 		PT_EXIT(&s->outputpt);
-    }
+	  }
   }
-  s->script = NULL;
   PSOCK_CLOSE(&s->sout);
   PT_END(&s->outputpt);
 }
 /*---------------------------------------------------------------------------*/
 static
-PT_THREAD(handle_input(struct httpd_state *s))
+PT_THREAD(handle_input(httpd_state *s))
 {
   PSOCK_BEGIN(&s->sin);
 
   PSOCK_READTO(&s->sin, ISO_space);
-
   if(strncasecmp(s->inputbuf, http_get, 4) == 0) {
     s->request_type = REQUEST_TYPE_GET;
     PSOCK_READTO(&s->sin, ISO_space);
@@ -704,14 +556,8 @@ PT_THREAD(handle_input(struct httpd_state *s))
     s->uri_len = PSOCK_DATALEN(&s->sin) - 1; // we remove the space at the end
     memcpy(&s->uri, &s->inputbuf, s->uri_len);
 
-    if(s->inputbuf[1] == ISO_space) {
-      strncpy(s->filename, http_index_html, sizeof(s->filename));
-    } else {
-    	// TODO: filename load need to be improved
-      s->inputbuf[PSOCK_DATALEN(&s->sin) - 1] = 0;
-      strncpy(s->filename, s->inputbuf, sizeof(s->filename));
-    }
   } else if(strncasecmp(s->inputbuf, http_post, 5) == 0) {
+	  PRINTF("***** handle_input: POST *******\n");
     s->request_type = REQUEST_TYPE_POST;
     PSOCK_READTO(&s->sin, ISO_space);
 
@@ -720,7 +566,7 @@ PT_THREAD(handle_input(struct httpd_state *s))
     }
 
     s->inputbuf[PSOCK_DATALEN(&s->sin) - 1] = 0;
-    strncpy(s->filename, s->inputbuf, sizeof(s->filename));
+
 
     /* POST: Read out the rest of the line and ignore it */
     PSOCK_READTO(&s->sin, ISO_nl);
@@ -734,6 +580,7 @@ PT_THREAD(handle_input(struct httpd_state *s))
      */
     s->content_length = 0;
     s->return_code = RETURN_CODE_LR;
+
     do {
       s->inputbuf[PSOCK_DATALEN(&s->sin)] = 0;
       /* We anticipate a content length */
@@ -764,6 +611,7 @@ PT_THREAD(handle_input(struct httpd_state *s))
       if(lock == s) {
         state = PARSE_POST_STATE_INIT;
       } else {
+    	  PRINTF("Entrei aqui codigo service una\n");
         s->return_code = RETURN_CODE_SU;
       }
     }
@@ -772,11 +620,15 @@ PT_THREAD(handle_input(struct httpd_state *s))
     while(s->content_length > 0 && lock == s &&
           s->return_code == RETURN_CODE_OK) {
       PSOCK_READBUF_LEN(&s->sin, s->content_length);
+
       s->content_length -= PSOCK_DATALEN(&s->sin);
 
       /* Parse the message body */
       parse_post_request_chunk(s->inputbuf, PSOCK_DATALEN(&s->sin),
                                (s->content_length == 0));
+      s->return_code = RETURN_CODE_OK;
+
+
       if(state == PARSE_POST_STATE_ERROR) {
         /* Could not parse: Bad Request and stop parsing */
         s->return_code = RETURN_CODE_BR;
@@ -788,12 +640,18 @@ PT_THREAD(handle_input(struct httpd_state *s))
      * STATE_MORE, it means that the message body ended half-way reading a key
      * or value. Set 'Bad Request'
      */
+    // TODO
     if(s->return_code == RETURN_CODE_OK && state != PARSE_POST_STATE_MORE) {
+    	PRINTF("Bad Request: Line 573\n");
       s->return_code = RETURN_CODE_BR;
     }
 
     lock_release(s);
-  } else {
+  } else if(strncasecmp(s->inputbuf, http_put, 4) == 0){
+
+	  PRINTF("passei por aqui\n");
+
+  }else {
     PSOCK_CLOSE_EXIT(&s->sin);
   }
 
@@ -807,64 +665,74 @@ PT_THREAD(handle_input(struct httpd_state *s))
 }
 /*---------------------------------------------------------------------------*/
 static void
-handle_connection(struct httpd_state *s)
+handle_connection(httpd_state *s)
 {
   handle_input(s);
   if(s->state == STATE_OUTPUT) {
 	rest_select_if(HTTP_IF);
-	int res_found = service_cbk(s, &s->response, s->response.buf, 0, 0);
-//	printf("\n||||||||||||||||||||||||||||||||||||||||||||||||||||||| Resource Found: %d\n", res_found);
-//	printf("||||||||||||||||||||||||||||||||||||||||||||||||||||||| LEN: %d\n", s->response.blen);
+	/*typedef int (*service_callback_t)(void *request, void *response,
+	                                  uint8_t *buffer, uint16_t preferred_size,
+	                                  int32_t *offset);*/
+	int res_found = service_cbk(s, &s->response, (uint8_t *)&s->response.buf, 0, 0);
+
+	/*typedef int (*service_callback_t)(void *request, void *response,
+	                                  uint8_t *buffer, uint16_t preferred_size,
+	                                  int32_t *offset);*/
+
+//	PRINTF("\n||||||||||||||||||||||||||||||||||||||||||||||||||||||| Resource Found: %d\n", res_found);
+//	PRINTF("||||||||||||||||||||||||||||||||||||||||||||||||||||||| LEN: %d\n", s->response.blen);
 //	int i;
 //	for(i = 0; i < s->response.blen; i++) {
-//		printf("%c", s->response.buf[i]);
+//		PRINTF("%c", s->response.buf[i]);
 //	}
-//	printf("\n|||||||||||||||||||||||||||||||||||||||||||||||||||||||\n\n");
-
+//	PRINTF("\n|||||||||||||||||||||||||||||||||||||||||||||||||||||||\n\n");
+	PRINTF("(handle_connection) State: %d\n", s->return_code);
 	handle_output(s, res_found);
   }
 }
+
 /*---------------------------------------------------------------------------*/
 static void
 appcall(void *state)
 {
-  struct httpd_state *s = (struct httpd_state *)state;
+  httpd_state *s = (httpd_state *)state;
+
+  int status_code = 1;
 
   if(uip_closed() || uip_aborted() || uip_timedout()) {
-    if(s != NULL) {
-      s->script = NULL;
-      s->blen = 0;
-      s->tmp_buf_len = 0;
-      s->response.blen = 0;
-      memb_free(&conns, s);
-    }
+	if(s != NULL) {
+		s->blen = 0;
+		s->tmp_buf_len = 0;
+		s->response.blen = 0;
+		memb_free(&conns, s);
+	}
   } else if(uip_connected()) {
-    s = (struct httpd_state *)memb_alloc(&conns);
-    if(s == NULL) {
-      uip_abort();
-      return;
-    }
-    tcp_markconn(uip_conn, s);
-    PSOCK_INIT(&s->sin, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
-    PSOCK_INIT(&s->sout, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
-    PT_INIT(&s->outputpt);
-    s->script = NULL;
-    s->state = STATE_WAITING;
-    timer_set(&s->timer, CLOCK_SECOND * 10);
-    handle_connection(s);
+	  s = (httpd_state *)memb_alloc(&conns);
+	  if(s == NULL) {
+		  uip_abort();
+		  return;
+	  }
+	  tcp_markconn(uip_conn, s);
+	  PSOCK_INIT(&s->sin, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
+	  PSOCK_INIT(&s->sout, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
+
+	  PT_INIT(&s->outputpt);
+
+	  s->state = STATE_WAITING;
+	  timer_set(&s->timer, CLOCK_SECOND * 10);
+	  handle_connection(s);
   } else if(s != NULL) {
-    if(uip_poll()) {
-      if(timer_expired(&s->timer)) {
-        uip_abort();
-        s->script = NULL;
-        memb_free(&conns, s);
-      }
-    } else {
-      timer_restart(&s->timer);
-    }
-    handle_connection(s);
+	if(uip_poll()) {
+	  if(timer_expired(&s->timer)) {
+		uip_abort();
+		memb_free(&conns, s);
+	  }
+	} else {
+	  timer_restart(&s->timer);
+	}
+	handle_connection(s);
   } else {
-    uip_abort();
+	uip_abort();
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -875,14 +743,13 @@ init(void)
   tcp_listen(UIP_HTONS(80));
   memb_init(&conns);
 
-  list_add(pages_list, &http_index_page);
+  //list_add(pages_list, &http_index_page);
 }
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(httpd_process, ev, data)
 {
   PROCESS_BEGIN();
-
-  printf("CC26XX Web Server\n");
+  PRINTF("Web Server\n");
 
   // TODO: ?
   //httpd_simple_event_new_config = process_alloc_event();

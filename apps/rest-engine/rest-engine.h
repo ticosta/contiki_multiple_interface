@@ -95,6 +95,7 @@ struct resource_s {
     restful_trigger_handler trigger;
     restful_trigger_handler resume;
   };
+  short type;
 };
 typedef struct resource_s resource_t;
 
@@ -111,8 +112,18 @@ typedef struct periodic_resource_s periodic_resource_t;
  * Macro to define a RESTful resource.
  * Resources are statically defined for the sake of efficiency and better memory management.
  */
+#define COAP_TYPE 0
+#define HTTP_TYPE 1
+
+/* Default Resources Fall on COAP -= TC =- */
 #define RESOURCE(name, attributes, get_handler, post_handler, put_handler, delete_handler) \
-  resource_t name = { NULL, NULL, NO_FLAGS, attributes, get_handler, post_handler, put_handler, delete_handler, { NULL } }
+RESOURCE_GENERIC(name, attributes, get_handler, post_handler, put_handler, delete_handler, COAP_TYPE)
+
+#define RESOURCE_HTTP(name, attributes, get_handler, post_handler, put_handler, delete_handler) \
+RESOURCE_GENERIC(name, attributes, get_handler, post_handler, put_handler, delete_handler, HTTP_TYPE)
+
+#define RESOURCE_GENERIC(name, attributes, get_handler, post_handler, put_handler, delete_handler, type) \
+resource_t name = { NULL, NULL, NO_FLAGS, attributes, get_handler, post_handler, put_handler, delete_handler, { NULL }, type }
 
 #define PARENT_RESOURCE(name, attributes, get_handler, post_handler, put_handler, delete_handler) \
   resource_t name = { NULL, NULL, HAS_SUB_RESOURCES, attributes, get_handler, post_handler, put_handler, delete_handler, { NULL } }
@@ -254,8 +265,8 @@ list_t rest_get_resources(void);
 
 
 
-extern const struct rest_implementation coap_rest_implementation;
-extern const struct rest_implementation http_rest_implementation;
+extern struct rest_implementation coap_rest_implementation;
+extern struct rest_implementation http_rest_implementation;
 
 /* CoAP rest interface implementation index */
 #define COAP_IF												0
