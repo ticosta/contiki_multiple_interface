@@ -23,8 +23,11 @@
 #else
 #define UIP_UDP_BUF  ((struct uip_udp_hdr *)&uip_buf[UIP_LLH_LEN + UIP_IPH_LEN])
 #endif
+
+#undef UIP_CONF_BUFFER_SIZE
+#define UIP_CONF_BUFFER_SIZE    1280
 /*---------------------------------------------------------------------------*/
-#define HTTPD_PATHLEN  16
+#define HTTPD_PATHLEN  100
 #define HTTPD_INBUF_LEN (HTTPD_PATHLEN + 10)
 
 #define TMP_BUF_SIZE   (UIP_TCP_MSS + 1)
@@ -34,11 +37,26 @@
 #define HTTPD_SIMPLE_POST_HANDLER_UNKNOWN 0
 #define HTTPD_SIMPLE_POST_HANDLER_ERROR   0xFFFFFFFF
 /*---------------------------------------------------------------------------*/
+#define REQUEST_TYPE_GET  1
+#define REQUEST_TYPE_POST 2
+/*---------------------------------------------------------------------------*/
 //
 #define HTTP_ACCEPT_HEADER_TEXT_PLAIN			1 << 1
 #define HTTP_ACCEPT_HEADER_APPLICATION_JSON 	1 << 2
 #define HTTP_ACCEPT_HEADER_APPLICATION_XML	 	1 << 3
-#define MAX_URI_LEN	50
+#define MAX_URI_LEN	                            50
+#define PARSE_POST_BUF_SIZES                    64
+#define MAX_PAYLOAD_SIZE                        100
+
+/* Last byte always used to null terminate */
+#define PARSE_POST_MAX_POS        (PARSE_POST_BUF_SIZES - 2)
+
+#define RETURN_CODE_OK   0
+#define RETURN_CODE_NF   1 /* Not Found */
+#define RETURN_CODE_SU   2 /* Service Unavailable */
+#define RETURN_CODE_BR   3 /* Bad Request */
+#define RETURN_CODE_LR   4 /* Length Required */
+#define RETURN_CODE_TL   5 /* Content Length too Large */
 
 /**
  * \brief Datatype for a handler which can process incoming POST requests
@@ -65,8 +83,11 @@ typedef struct httpd_simple_post_handler {
 typedef struct http_response_t {
 	char buf[HTTPD_SIMPLE_MAIN_BUF_SIZE];
 	int blen;
-	uint16_t content_type;
-
+	char content_type[50];
+	uint16_t content_length;
+	unsigned int status;
+	char * status_str;
+	char imediate_response;
 } http_response;
 
 /*---------------------------------------------------------------------------*/
@@ -80,9 +101,12 @@ typedef struct  {
   const char **ptr;
   int content_length;
 
-  size_t uri_len; 				/*!< uri-length >*/
-  char uri[MAX_URI_LEN]; 		/* uri-name */
-
+  size_t complete_uri_len; 						/*!< uri-length >*/
+  size_t uri_len;
+  char *uri; 							/* uri-name */
+  char complete_uri[MAX_URI_LEN]; 		/* uri-name */
+  const char* uri_query;
+  size_t uri_query_len;
   int blen;
   int tmp_buf_len;
   int tmp_buf_copied;
@@ -97,7 +121,12 @@ typedef struct  {
   short return_code;
   // response
   http_response response;
-  char buffer[1250];
+  char buffer[MAX_PAYLOAD_SIZE];
+  // ip address of dest node
+  char *dst_ipaddr;
+  char *action;
+  uint16_t action_len;
+  struct uip_conn * currentConnection;
 }httpd_state, http_packet_t ;
 /*---------------------------------------------------------------------------*/
 

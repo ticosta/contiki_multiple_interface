@@ -51,14 +51,16 @@
 //#include <strings.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <stddef.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include "debug.h"
+#include "coap_client.h"
+#include "er-coap-constants.h"
 
 #include "er-http.h"
 
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 #define PRINTF(...) printf(__VA_ARGS__)
 #define PRINT6ADDR(addr) PRINTF("[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7], ((uint8_t *)addr)[8], ((uint8_t *)addr)[9], ((uint8_t *)addr)[10], ((uint8_t *)addr)[11], ((uint8_t *)addr)[12], ((uint8_t *)addr)[13], ((uint8_t *)addr)[14], ((uint8_t *)addr)[15])
@@ -82,31 +84,12 @@
 #define STATE_OUTPUT         1
 #define IPADDR_BUF_LEN      64
 /*---------------------------------------------------------------------------*/
-#define RETURN_CODE_OK   0
-#define RETURN_CODE_NF   1 /* Not Found */
-#define RETURN_CODE_SU   2 /* Service Unavailable */
-#define RETURN_CODE_BR   3 /* Bad Request */
-#define RETURN_CODE_LR   4 /* Length Required */
-#define RETURN_CODE_TL   5 /* Content Length too Large */
-/*---------------------------------------------------------------------------*/
 /* POST request machine states */
 #define PARSE_POST_STATE_INIT            0
 #define PARSE_POST_STATE_MORE            1
 #define PARSE_POST_STATE_READING_KEY     2
 #define PARSE_POST_STATE_READING_VAL     3
 #define PARSE_POST_STATE_ERROR  0xFFFFFFFF
-/*---------------------------------------------------------------------------*/
-#define PARSE_POST_BUF_SIZES            64
-
-/* Last byte always used to null terminate */
-#define PARSE_POST_MAX_POS        (PARSE_POST_BUF_SIZES - 2)
-
-static char key[PARSE_POST_BUF_SIZES];
-static char val_escaped[PARSE_POST_BUF_SIZES];
-static char val[PARSE_POST_BUF_SIZES];
-static int key_len;
-static int val_len;
-static long state;
 /*---------------------------------------------------------------------------*/
 /*
  * We can only handle a single POST request at a time. Since a second POST
@@ -117,7 +100,6 @@ static long state;
  * a POST request. We maintain a global lock which is either NULL or points
  * to the http conn which currently has the lock
  */
-static httpd_state *lock;
 /*---------------------------------------------------------------------------*/
 PROCESS(httpd_process, "Web Server");
 /*---------------------------------------------------------------------------*/
@@ -139,12 +121,6 @@ PROCESS(httpd_process, "Web Server");
 /*---------------------------------------------------------------------------*/
 #define CONTENT_OPEN  "<pre>"
 #define CONTENT_CLOSE "</pre>"
-/*---------------------------------------------------------------------------*/
-#define REQUEST_TYPE_GET  1
-#define REQUEST_TYPE_POST 2
-/*---------------------------------------------------------------------------*/
-#define BOARD_STRING "-WISMOTE-"
-
 /*---------------------------------------------------------------------------*/
 /* Page template */
 static const char http_header_200[] = HTTP_200_OK;
@@ -178,44 +154,19 @@ httpd_simple_register_post_handler(httpd_simple_post_handler_t *h)
 }
 
 /*---------------------------------------------------------------------------*/
-static const httpd_simple_post_handler_t *handler;
+//static const httpd_simple_post_handler_t *handler;
 /*---------------------------------------------------------------------------*/
 
 
 MEMB(conns, httpd_state, CONNS);
 /*---------------------------------------------------------------------------*/
-#define HEX_TO_INT(x)  (isdigit(x) ? x - '0' : x - 'W')
+
 
 static service_callback_t service_cbk = NULL;
 
 void http_set_service_callback(service_callback_t callback) {
 	service_cbk = callback;
 }
-static size_t
-url_unescape(const char *src, size_t srclen, char *dst, size_t dstlen)
-{
-  size_t i, j;
-  int a, b;
-
-  for(i = j = 0; i < srclen && j < dstlen - 1; i++, j++) {
-    if(src[i] == '%' && isxdigit(*(unsigned char *)(src + i + 1))
-       && isxdigit(*(unsigned char *)(src + i + 2))) {
-      a = tolower(*(unsigned char *)(src + i + 1));
-      b = tolower(*(unsigned char *)(src + i + 2));
-      dst[j] = ((HEX_TO_INT(a) << 4) | HEX_TO_INT(b)) & 0xff;
-      i += 2;
-    } else if(src[i] == '+') {
-      dst[j] = ' ';
-    } else {
-      dst[j] = src[i];
-    }
-  }
-
-  dst[j] = '\0';
-
-  return i == srclen;
-}
-/*---------------------------------------------------------------------------*/
 
 /* Envia Bocados */
 static
@@ -261,123 +212,24 @@ PT_THREAD(enqueue_chunk(httpd_state *s, uint8_t immediate,
 }
 
 
-/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------
 static void
 lock_obtain(httpd_state *s)
 {
   if(lock == NULL) {
     lock = s;
   }
-}
-/*---------------------------------------------------------------------------*/
+}*/
+/*---------------------------------------------------------------------------
 static void
 lock_release(httpd_state *s)
 {
   if(lock == s) {
     lock = NULL;
   }
-}
+}*/
 /*---------------------------------------------------------------------------*/
-static void
-parse_post_request_chunk(char *buf, int buf_len, int last_chunk)
-{
 
-  int i;
-  int finish;
-
-  for(i = 0; i < buf_len; i++) {
-    switch(state) {
-    case PARSE_POST_STATE_INIT:
-      state = PARSE_POST_STATE_MORE;
-    /* continue */
-    case PARSE_POST_STATE_MORE:
-      memset(key, 0, PARSE_POST_BUF_SIZES);
-      memset(val, 0, PARSE_POST_BUF_SIZES);
-      memset(val_escaped, 0, PARSE_POST_BUF_SIZES);
-      key_len = 0;
-      val_len = 0;
-      state = PARSE_POST_STATE_READING_KEY;
-    /* continue */
-    case PARSE_POST_STATE_READING_KEY:
-      if(buf[i] == ISO_equal) {
-        state = PARSE_POST_STATE_READING_VAL;
-      } else if(buf[i] == ISO_amp) {
-        /* Don't accept an amp while reading a key */
-        state = PARSE_POST_STATE_ERROR;
-      } else {
-        /* Make sure we don't overshoot key's boundary */
-        if(key_len <= PARSE_POST_MAX_POS) {
-          key[key_len] = buf[i];
-          key_len++;
-        } else {
-          /* Not enough space for the key. Abort */
-          state = PARSE_POST_STATE_ERROR;
-        }
-      }
-      break;
-    case PARSE_POST_STATE_READING_VAL:
-      finish = 0;
-      if(buf[i] == ISO_amp) {
-        finish = 1;
-      } else if(buf[i] == ISO_equal) {
-        /* Don't accept an '=' while reading a val */
-        state = PARSE_POST_STATE_ERROR;
-      } else {
-        /* Make sure we don't overshoot key's boundary */
-        if(val_len <= PARSE_POST_MAX_POS) {
-          val[val_len] = buf[i];
-          val_len++;
-          /* Last character of the last chunk */
-          if((i == buf_len - 1) && (last_chunk == 1)) {
-            finish = 1;
-          }
-        } else {
-          /* Not enough space for the value. Abort */
-          state = PARSE_POST_STATE_ERROR;
-        }
-      }
-
-      if(finish == 1) {
-        /*
-         * Done reading a key=value pair, either because we encountered an amp
-         * or because we reached the end of the message body.
-         *
-         * First, unescape the value.
-         *
-         * Then invoke handlers. We will bail out with PARSE_POST_STATE_ERROR,
-         * unless the key-val gets correctly processed
-         */
-        url_unescape(val, val_len, val_escaped, PARSE_POST_BUF_SIZES);
-        val_len = strlen(val_escaped);
-
-        for(handler = list_head(post_handlers); handler != NULL;
-            handler = list_item_next((void *)handler)) {
-          if(handler->handler != NULL) {
-            finish = handler->handler(key, key_len, val_escaped, val_len);
-          }
-          if(finish == HTTPD_SIMPLE_POST_HANDLER_ERROR) {
-            state = PARSE_POST_STATE_ERROR;
-            break;
-          } else if(finish == HTTPD_SIMPLE_POST_HANDLER_OK) {
-            /* Restart the state machine to expect the next pair */
-            state = PARSE_POST_STATE_MORE;
-
-            break;
-          }
-          /* Else, continue */
-        }
-      }
-      break;
-    case PARSE_POST_STATE_ERROR:
-      /* If we entered the error state earlier, do nothing */
-      return;
-    default:
-      break;
-    }
-  }
-  //(char *buf, int buf_len, int last_chunk)
-  PRINTF("Fim do Post! => chave=%s <-> valor=%s || length = %d || state = %ld\n", key, val, buf_len, state);
-}
 /*---------------------------------------------------------------------------*/
 static
 PT_THREAD(send_string(httpd_state *s, const char *str))
@@ -391,7 +243,7 @@ PT_THREAD(send_string(httpd_state *s, const char *str))
 
 static
 PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
-                       const uint16_t content_type, const char *redir,
+                       const char *content_type, const char *redir,
                        const char **additional))
 {
   PT_BEGIN(&s->generate_pt);
@@ -437,6 +289,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 	  PRINTF("Return Code: %d\n", s->return_code);
     if(s->return_code == RETURN_CODE_OK) {
     	/* TODO: Neste caso temos que dar um novo sitio para redirecionar */
+    	PRINTF("RETURN_CODE_OK\n");
       PT_WAIT_THREAD(
     		  &s->outputpt,
 			  send_headers(
@@ -444,14 +297,15 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 					  http_header_302,
 					  s->response.content_type, //TODO: passar a char o content_type
 					  NULL,
-					  NULL
+					  http_header_con_close
 			  )
 	  	  );
     } else if(s->return_code == RETURN_CODE_LR) {
       PT_WAIT_THREAD(
     		  &s->outputpt,
 			  send_headers(
-					  s, http_header_411,
+					  s,
+					  http_header_411,
 					  s->response.content_type,
 					  NULL,
 					  http_header_con_close
@@ -497,74 +351,106 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
     }
   } else if(s->request_type == REQUEST_TYPE_GET) {
 	  PRINTF("***** METHOD GET *******\n");
-	  PRINTF("Content-Type: %d\n", s->response.content_type);
+	  PRINTF("Content-Type: %s\n", s->response.content_type);
 	  if(resourse_found) {
     	PRINTF("***** Resource Found!\n");
         PT_WAIT_THREAD(
         		&s->outputpt,
 				send_headers(
 						s,
-						http_header_200,
+						s->response.status_str,
 						s->response.content_type,
 						NULL,
 						http_header_con_close
 					)
 				);
-        PT_WAIT_THREAD(&s->outputpt,
-                       enqueue_chunk(
-                    		   s,
-							   1,
-							   s->response.buf
-						   )
-					   );
+        if(s->response.status >= 200 && s->response.status <= 299){
+            PT_WAIT_THREAD(&s->outputpt,
+                           enqueue_chunk(
+                                   s,
+                                   1,
+                                   s->response.buf
+                               )
+                           );
+        }else{
+            uip_close();
+            PT_EXIT(&s->outputpt);
+        }
 
-	  }else {
+	 /* }else {
 		PT_WAIT_THREAD(
 				&s->outputpt,
 				send_headers(
 						s,
-						http_header_404,
+						s->response.status_str,
 						s->response.content_type,
 						NULL,
 						http_header_con_close
 					)
 				);
-		/*PT_WAIT_THREAD(&s->outputpt,
-					 send_string(s, NOT_FOUND));*/
-		uip_close();
-		PT_EXIT(&s->outputpt);
-	  }
+
+	  }*/
   }
   PSOCK_CLOSE(&s->sout);
   PT_END(&s->outputpt);
 }
+
+/*
+ *
+ *
+ *
+ */
 /*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static char * ptr_toWrite;
 static
 PT_THREAD(handle_input(httpd_state *s))
 {
   PSOCK_BEGIN(&s->sin);
 
   PSOCK_READTO(&s->sin, ISO_space);
+
   if(strncasecmp(s->inputbuf, http_get, 4) == 0) {
-    s->request_type = REQUEST_TYPE_GET;
-    PSOCK_READTO(&s->sin, ISO_space);
 
-    if(s->inputbuf[0] != ISO_slash) {
-      PSOCK_CLOSE_EXIT(&s->sin);
-    }
+	PRINTF("***** handle_input: GET *******\n");
+	s->request_type = REQUEST_TYPE_GET;
+	PSOCK_READTO(&s->sin, ISO_space);
+	// copy uri
+	s->complete_uri_len = PSOCK_DATALEN(&s->sin) - 1; // we remove the space at the end
+	memcpy(&s->complete_uri, &s->inputbuf, s->complete_uri_len);
+	s->complete_uri[s->complete_uri_len] = '\0';
 
-    // copy uri
-    s->uri_len = PSOCK_DATALEN(&s->sin) - 1; // we remove the space at the end
-    memcpy(&s->uri, &s->inputbuf, s->uri_len);
+	s->uri = s->complete_uri;
+	s->uri_query = strstr(s->complete_uri, "?") + 1;
+
+	if(s->uri_query != NULL){
+	    s->uri_len = s->uri_query - s->complete_uri - 1;
+	    s->uri_query_len = s->complete_uri_len - s->uri_len - 1;
+	}
+	else{
+	    s->uri_query_len = 0;
+	    s->uri_len = s->complete_uri_len;
+	}
+
+
+	if(s->inputbuf[0] != ISO_slash) {
+		PSOCK_CLOSE_EXIT(&s->sin);
+	}
+
+
 
   } else if(strncasecmp(s->inputbuf, http_post, 5) == 0) {
-	  PRINTF("***** handle_input: POST *******\n");
-    s->request_type = REQUEST_TYPE_POST;
-    PSOCK_READTO(&s->sin, ISO_space);
 
-    if(s->inputbuf[0] != ISO_slash) {
-      PSOCK_CLOSE_EXIT(&s->sin);
-    }
+	PRINTF("***** handle_input: POST *******\n");
+	s->request_type = REQUEST_TYPE_POST;
+	PSOCK_READTO(&s->sin, ISO_space);
+
+	if(s->inputbuf[0] != ISO_slash) {
+		PSOCK_CLOSE_EXIT(&s->sin);
+	}
+
+	s->uri_len = PSOCK_DATALEN(&s->sin) - 1; // we remove the space at the end
+	memcpy(&s->uri, &s->inputbuf, s->uri_len);
 
     s->inputbuf[PSOCK_DATALEN(&s->sin) - 1] = 0;
 
@@ -574,7 +460,7 @@ PT_THREAD(handle_input(httpd_state *s))
 
     /*
      * Start parsing headers. We look for Content-Length and ignore everything
-     * else until we hit the start of the message body.
+     * else until we hit the start of the message body.status_code
      *
      * We will return 411 if the client doesn't send Content-Length and 413
      * if Content-Length is too high
@@ -588,6 +474,7 @@ PT_THREAD(handle_input(httpd_state *s))
       if((PSOCK_DATALEN(&s->sin) > 14) &&
          strncasecmp(s->inputbuf, "Content-Length:", 15) == 0) {
         char *val_start = &s->inputbuf[15];
+        PRINTF("INPUTBUF: %s\n", s->inputbuf);
         s->content_length = atoi(val_start);
 
         /* So far so good */
@@ -605,8 +492,9 @@ PT_THREAD(handle_input(httpd_state *s))
       s->return_code = RETURN_CODE_TL;
     }
 
-    if(s->return_code == RETURN_CODE_OK) {
-      /* Acceptable Content Length. Try to obtain a lock */
+    //TODO: ver isto
+    /*if(s->return_code == RETURN_CODE_OK) {
+       Acceptable Content Length. Try to obtain a lock
       lock_obtain(s);
 
       if(lock == s) {
@@ -615,47 +503,40 @@ PT_THREAD(handle_input(httpd_state *s))
     	  PRINTF("Entrei aqui codigo service una\n");
         s->return_code = RETURN_CODE_SU;
       }
-    }
-    char * ptr = s->buffer;
+    }*/
+
     /* Parse the message body, unless we have detected an error. */
-    while(s->content_length > 0 && lock == s &&
+
+    s->response.content_length = s->content_length;
+    ptr_toWrite = s->buffer;
+    PRINTF("content_length = %d || return_code = %d\n",
+           s->content_length,
+           s->return_code);
+
+    while(s->content_length > 0 /*&& lock == s */&&
           s->return_code == RETURN_CODE_OK) {
       PSOCK_READBUF_LEN(&s->sin, s->content_length);
 
       s->content_length -= PSOCK_DATALEN(&s->sin);
 
-      /* Parse the message body */
-
       int len = PSOCK_DATALEN(&s->sin);
-      memcpy(ptr, s->inputbuf, len);
-      ptr += len;
-//      parse_post_request_chunk(s->inputbuf, PSOCK_DATALEN(&s->sin),
-//                               (s->content_length == 0));
+      memcpy(ptr_toWrite, &s->inputbuf, len);
+      ptr_toWrite += len;
 
-      s->return_code = RETURN_CODE_OK;
-
-
-      if(state == PARSE_POST_STATE_ERROR) {
-        /* Could not parse: Bad Request and stop parsing */
-        s->return_code = RETURN_CODE_BR;
-      }
     }
 
-    /*
-     * Done. If our return code is OK but the state machine is not in
-     * STATE_MORE, it means that the message body ended half-way reading a key
-     * or value. Set 'Bad Request'
-     */
-    // TODO
-    if(s->return_code == RETURN_CODE_OK && state != PARSE_POST_STATE_MORE) {
-    	PRINTF("Bad Request: Line 573\n");
-      s->return_code = RETURN_CODE_BR;
-    }
+    if(s->content_length > 0)
+    	*(++ptr_toWrite) = '\0';
 
-    lock_release(s);
+    //
+    s->content_length = s->response.content_length;
+    s->response.content_length = 0;
+
+    //TODO: ver isto
+    //lock_release(s);
   } else if(strncasecmp(s->inputbuf, http_put, 4) == 0){
 
-	  PRINTF("passei por aqui\n");
+	  PRINTF("***** handle_input: PUT *******\n\n");
 
   }else {
     PSOCK_CLOSE_EXIT(&s->sin);
@@ -676,14 +557,14 @@ handle_connection(httpd_state *s)
   handle_input(s);
   if(s->state == STATE_OUTPUT) {
 	rest_select_if(HTTP_IF);
-	/*typedef int (*service_callback_t)(void *request, void *response,
-	                                  uint8_t *buffer, uint16_t preferred_size,
-	                                  int32_t *offset);*/
+
 	int res_found = service_cbk(s, &s->response, (uint8_t *)&s->response.buf, 0, 0);
 
-	/*typedef int (*service_callback_t)(void *request, void *response,
-	                                  uint8_t *buffer, uint16_t preferred_size,
-	                                  int32_t *offset);*/
+	PRINTF("(handle_connection) State: %d   ------------   res_found = %d\n", s->return_code, res_found);
+
+	if(s->response.imediate_response){
+	    handle_output(s, res_found);
+	}
 
 //	PRINTF("\n||||||||||||||||||||||||||||||||||||||||||||||||||||||| Resource Found: %d\n", res_found);
 //	PRINTF("||||||||||||||||||||||||||||||||||||||||||||||||||||||| LEN: %d\n", s->response.blen);
@@ -692,24 +573,71 @@ handle_connection(httpd_state *s)
 //		PRINTF("%c", s->response.buf[i]);
 //	}
 //	PRINTF("\n|||||||||||||||||||||||||||||||||||||||||||||||||||||||\n\n");
-	PRINTF("(handle_connection) State: %d\n", s->return_code);
-	handle_output(s, res_found);
+
   }
 }
+/*---------------------------------------------------------------------------*/
+static void
+parse_coap(coap_client_request_t *coap_request, httpd_state *s){
 
+    if(coap_request->method == COAP_GET){
+        memcpy(s->response.buf, coap_request->buffer, coap_request->blen);
+        s->response.blen = coap_request->blen;
+    }
+
+    s->request_type = coap_request->method;
+    //s->return_code = coap_requ TODO:
+
+    s->currentConnection = coap_request->connection;
+
+
+
+}
+
+/*---------------------------------------------------------------------------*/
+static void
+proxy_call(void *state){
+    coap_client_request_t *coap_request = (coap_client_request_t *)state;
+
+    httpd_state *s = (httpd_state *)memb_alloc(&conns);
+
+    s->blen = 0;
+    s->tmp_buf_len = 0;
+    s->response.blen = 0;
+    memset(s->buffer, 0, sizeof(s->buffer));
+
+    /* Call Parse */
+    parse_coap(coap_request, s);
+
+    if(s == NULL) {
+        uip_abort();
+        return;
+    }
+    tcp_markconn(s->currentConnection, s);
+
+    //PSOCK_INIT(&s->sin, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
+    PSOCK_INIT(&s->sout, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
+
+    PT_INIT(&s->outputpt);
+
+    s->state = STATE_WAITING;
+
+    timer_set(&s->timer, CLOCK_SECOND * 10);
+    handle_output(s, 1);
+
+}
 /*---------------------------------------------------------------------------*/
 static void
 appcall(void *state)
 {
   httpd_state *s = (httpd_state *)state;
 
-  int status_code = 1;
-
   if(uip_closed() || uip_aborted() || uip_timedout()) {
 	if(s != NULL) {
 		s->blen = 0;
 		s->tmp_buf_len = 0;
 		s->response.blen = 0;
+		memset(s->buffer, 0, sizeof(s->buffer));
 		memb_free(&conns, s);
 	}
   } else if(uip_connected()) {
@@ -725,8 +653,12 @@ appcall(void *state)
 	  PT_INIT(&s->outputpt);
 
 	  s->state = STATE_WAITING;
+
+	  s->currentConnection = uip_conn;
+
 	  timer_set(&s->timer, CLOCK_SECOND * 10);
 	  handle_connection(s);
+
   } else if(s != NULL) {
 	if(uip_poll()) {
 	  if(timer_expired(&s->timer)) {
@@ -734,12 +666,12 @@ appcall(void *state)
 		memb_free(&conns, s);
 	  }
 	} else {
-	  timer_restart(&s->timer);
+	    timer_restart(&s->timer);
 	}
-	handle_connection(s);
+	    handle_connection(s);
   } else {
-	uip_abort();
-  }
+        uip_abort();
+    }
 }
 /*---------------------------------------------------------------------------*/
 
@@ -748,8 +680,6 @@ init(void)
 {
   tcp_listen(UIP_HTONS(80));
   memb_init(&conns);
-
-  //list_add(pages_list, &http_index_page);
 }
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(httpd_process, ev, data)
@@ -762,10 +692,14 @@ PROCESS_THREAD(httpd_process, ev, data)
 
   init();
 
-
   while(1) {
-    PROCESS_WAIT_EVENT_UNTIL(ev == tcpip_event);
-    appcall(data);
+    PROCESS_WAIT_EVENT_UNTIL(ev == tcpip_event || ev == PROCESS_EVENT_CUSTOM);
+    if(ev == tcpip_event){
+        appcall(data);
+    }else if(ev == PROCESS_EVENT_CUSTOM){
+        proxy_call(data);
+    }
+
   }
 
   PROCESS_END();

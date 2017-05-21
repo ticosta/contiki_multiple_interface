@@ -9,10 +9,10 @@
 
 #include "er-http.h"
 #include "er-coap.h"   // TODO: Esta aqui só para as constantes e enums no rest interface
-#include "er-http.h"
 
 
-#define DEBUG 1
+
+#define DEBUG 0
 #if DEBUG
 #include <stdio.h>
 #include "net/ip/uip-debug.h"
@@ -22,6 +22,10 @@
 #define PRINTLLADDR(addr)
 #endif
 
+static int
+http_get_variable(const char *buffer, size_t length, const char *name,
+                  const char **output);
+
 /** Initialize the REST implementation. */
 void http_init_engine(void) {
 	process_start(&httpd_process, NULL);
@@ -30,7 +34,6 @@ void http_init_engine(void) {
 /** Get request URI path. */
 int http_get_header_uri_path(void *request, const char **path) {
 	httpd_state *const http_pkt = (httpd_state *)request;
-	//const struct httpd_state *http_s = (struct httpd_state *)request;
 	*path = http_pkt->uri;
 
 	return http_pkt->uri_len;
@@ -39,7 +42,6 @@ int http_get_header_uri_path(void *request, const char **path) {
 /** Get the method of a request. */
 rest_resource_flags_t http_get_rest_method(void *request) {
 	httpd_state *const http_pkt = (httpd_state *)request;
-	//struct httpd_state *http_s = (struct httpd_state *)request;
 
 	return (rest_resource_flags_t)(1 <<
 	                                 (http_pkt->request_type - 1));
@@ -47,17 +49,19 @@ rest_resource_flags_t http_get_rest_method(void *request) {
 
 /** Set the status code of a response. */
 int http_set_status_code(void *response, unsigned int code) {
-	// TODO
-	return 0;
+    httpd_state *const http_pkt = (httpd_state *)response;
+
+    http_pkt->response.status = code;
+
+	return http_pkt->response.status;
 }
 
 /** Get the content-type of a request. */
 int http_get_header_content_type(void *request,
 							 unsigned int *content_format) {
 	httpd_state *const http_pkt = (httpd_state *)request;
-	//struct httpd_state *http_s = (struct httpd_state *)request;
 
-	*content_format = http_pkt->response.content_type;
+	*content_format = (unsigned int)http_pkt->response.content_type;
 	return 1;
 }
 
@@ -65,16 +69,16 @@ int http_get_header_content_type(void *request,
 int http_set_header_content_type(void *response,
 							 unsigned int content_type) {
 	httpd_state *const http_pkt = (httpd_state *)response;
-	//struct httpd_state *http_s = (struct httpd_state *)response;
 
-	http_pkt->response.content_type = content_type;
+	memcpy(http_pkt->response.content_type, "text/plain", strlen("text/plain"));
+
 	return 1;
 }
 
 /** Get the Accept types of a request. */
 int http_get_header_accept(void *request, unsigned int *accept) {
-	httpd_state *const http_pkt = (httpd_state *)request;
-	//struct httpd_state *http_s = (struct httpd_state *)request;
+	//httpd_state *const http_pkt = (httpd_state *)request;
+
 
 	return 0;
 }
@@ -99,8 +103,7 @@ int http_get_header_max_age(void *request, uint32_t *age) {
 
 /** Set the Max-Age option of a response. */
 int http_set_header_max_age(void *response, uint32_t age) {
-	//struct httpd_state *http_s = (struct httpd_state *)response;
-	httpd_state *const http_pkt = (httpd_state *)response;
+	//httpd_state *const http_pkt = (httpd_state *)response;
 	// TODO
 	return 0;
 }
@@ -108,8 +111,7 @@ int http_set_header_max_age(void *response, uint32_t age) {
 /** Set the ETag option of a response. */
 int http_set_header_etag(void *response, const uint8_t *etag,
 					 size_t length) {
-	httpd_state *const http_pkt = (httpd_state *)response;
-	//struct httpd_state *http_s = (struct httpd_state *)response;
+	//httpd_state *const http_pkt = (httpd_state *)response;
 	// TODO: etag é especifico do CoAP, e serve para marcar a resource com uma versão.
 
 
@@ -119,39 +121,39 @@ int http_set_header_etag(void *response, const uint8_t *etag,
 
 /** Get the If-Match option of a request. */
 int http_get_header_if_match(void *request, const uint8_t **etag) {
-	httpd_state *const http_pkt = (httpd_state *)request;
-	//struct httpd_state *http_s = (struct httpd_state *)request;
+	//httpd_state *const http_pkt = (httpd_state *)request;
+
 	// TODO
 	return 0;
 }
 
 /** Get the If-Match option of a request. */
 int http_get_header_if_none_match(void *request) {
-	httpd_state *const http_pkt = (httpd_state *)request;
-	//struct httpd_state *http_s = (struct httpd_state *)request;
+	//httpd_state *const http_pkt = (httpd_state *)request;
+
 	// TODO
 	return 0;
 }
 
 /** Get the Host option of a request. */
 int http_get_header_uri_host(void *request, const char **host) {
-	httpd_state *const http_pkt = (httpd_state *)request;
-	//struct httpd_state *http_s = (struct httpd_state *)request;
+	//httpd_state *const http_pkt = (httpd_state *)request;
+
 	// TODO
 	return 0;
 }
 
 /** Set the location option of a response. */
 int http_set_header_location_path(void *response, const char *location) {
-	httpd_state *const http_pkt = (httpd_state *)response;
-	//struct httpd_state *http_s = (struct httpd_state *)response;
+	//httpd_state *const http_pkt = (httpd_state *)response;
+
 	// TODO
 	return 0;
 }
 
 /** Get the payload option of a request. */
 int http_get_payload(void *request, const uint8_t **payload) {
-	httpd_state *const http_pkt = (httpd_state *)request;
+	//httpd_state *const http_pkt = (httpd_state *)request;
 	// TODO
 	return 0;
 }
@@ -175,8 +177,10 @@ int http_get_header_uri_query(void *request, const char **value) {
 /** Get the value of a request query key-value pair. */
 int http_get_query_variable(void *request, const char *name,
 						const char **value) {
-	// TODO
-	return 0;
+	http_packet_t *req = (http_packet_t *)request;
+
+	return http_get_variable(req->uri_query, req->uri_query_len,
+							 name, value);
 }
 
 /** Get the value of a request POST key-value pair. */
@@ -196,6 +200,40 @@ http_observe_handler(resource_t *resource, void *request, void *response) {
 
 }
 
+static int
+http_get_variable(const char *buffer, size_t length, const char *name,
+                  const char **output)
+{
+  const char *start = NULL;
+  const char *end = NULL;
+  const char *value_end = NULL;
+  size_t name_len = 0;
+
+  /*initialize the output buffer first */
+  *output = 0;
+
+  name_len = strlen(name);
+  end = buffer + length;
+
+  for(start = buffer; start + name_len < end; ++start) {
+    if((start == buffer || start[-1] == '&') && start[name_len] == '='
+       && strncmp(name, start, name_len) == 0) {
+
+      /* Point start to variable value */
+      start += name_len + 1;
+
+      /* Point end to the end of the value */
+      value_end = (const char *)memchr(start, '&', end - start);
+      if(value_end == NULL) {
+        value_end = end;
+      }
+      *output = start;
+
+      return value_end - start;
+    }
+  }
+  return 0;
+}
 
 /*---------------------------------------------------------------------------*/
 /*- REST Engine Interface ---------------------------------------------------*/

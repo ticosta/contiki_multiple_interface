@@ -39,17 +39,17 @@
 #ifndef ER_COAP_H_
 #define ER_COAP_H_
 
+#include "coap_client.h"
 #include <stddef.h> /* for size_t */
 #include "contiki-net.h"
 #include "er-coap-constants.h"
 #include "er-coap-conf.h"
+#define VALUE_TO_STRING(x) #x
+#define VALUE(x) VALUE_TO_STRING(x)
+#define VAR_NAME_VALUE(var) #var "="  VALUE(var)
 
-/* sanity check for configured values */
 #define COAP_MAX_PACKET_SIZE  (COAP_MAX_HEADER_SIZE + REST_MAX_CHUNK_SIZE)
-#if COAP_MAX_PACKET_SIZE > (UIP_BUFSIZE - UIP_IPH_LEN - UIP_UDPH_LEN)
-#error "UIP_CONF_BUFFER_SIZE too small for REST_MAX_CHUNK_SIZE"
-#endif
-
+int coap_get_payload(void *packet, const uint8_t **payload);
 /* use Erbium CoAP for the REST Engine*/
 #include "rest-engine.h"
 
@@ -128,6 +128,7 @@ typedef struct {
   uint8_t if_none_match;
 
   uint16_t payload_len;
+  coap_client_request_t *user_data;
   uint8_t *payload;
 } coap_packet_t;
 

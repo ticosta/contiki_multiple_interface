@@ -102,7 +102,7 @@ coap_block1_handler(void *request, void *response, uint8_t *target, size_t *len,
   }
 
   if(IS_OPTION(packet, COAP_OPTION_BLOCK1)) {
-    PRINTF("Blockwise: block 1 request: Num: %u, More: %u, Size: %u, Offset: %u\n",
+    PRINTF("Blockwise: block 1 request: Num: %ld, More: %d, Size: %d, Offset: %ld\n",
            packet->block1_num,
            packet->block1_more,
            packet->block1_size,
