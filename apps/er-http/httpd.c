@@ -110,26 +110,7 @@ PROCESS(httpd_process, "Web Server");
 #define ISO_column    0x3A
 #define ISO_equal     0x3D
 /*---------------------------------------------------------------------------*/
-#define HTTP_200_OK "HTTP/1.0 200 OK\r\n"
-#define HTTP_302_FO "HTTP/1.0 302 Found\r\n"
-#define HTTP_400_BR "HTTP/1.0 400 Bad Request\r\n"
-#define HTTP_404_NF "HTTP/1.0 404 Not Found\r\n"
-#define HTTP_411_LR "HTTP/1.0 411 Length Required\r\n"
-#define HTTP_413_TL "HTTP/1.0 413 Request Entity Too Large\r\n"
-#define HTTP_503_SU "HTTP/1.0 503 Service Unavailable\r\n"
-#define CONN_CLOSE  "Connection: close\r\n"
-/*---------------------------------------------------------------------------*/
-#define CONTENT_OPEN  "<pre>"
-#define CONTENT_CLOSE "</pre>"
-/*---------------------------------------------------------------------------*/
-/* Page template */
-static const char http_header_200[] = HTTP_200_OK;
-static const char http_header_302[] = HTTP_302_FO;
-static const char http_header_400[] = HTTP_400_BR;
-static const char http_header_404[] = HTTP_404_NF;
-static const char http_header_411[] = HTTP_411_LR;
-static const char http_header_413[] = HTTP_413_TL;
-static const char http_header_503[] = HTTP_503_SU;
+
 
 static const char http_get[] = "GET ";
 static const char http_post[] = "POST ";
@@ -377,7 +358,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
             PT_EXIT(&s->outputpt);
         }
 
-	 /* }else {
+	  }/*else {
 		PT_WAIT_THREAD(
 				&s->outputpt,
 				send_headers(
@@ -390,7 +371,9 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 				);
 
 	  }*/
+
   }
+
   PSOCK_CLOSE(&s->sout);
   PT_END(&s->outputpt);
 }

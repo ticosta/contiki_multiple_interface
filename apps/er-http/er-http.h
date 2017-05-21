@@ -70,6 +70,27 @@
  * it. HTTPD_SIMPLE_POST_HANDLER_ERROR if it does know how to handle it but
  * the request was malformed.
  */
+#define HTTP_200_OK "HTTP/1.0 200 OK\r\n"
+#define HTTP_302_FO "HTTP/1.0 302 Found\r\n"
+#define HTTP_400_BR "HTTP/1.0 400 Bad Request\r\n"
+#define HTTP_404_NF "HTTP/1.0 404 Not Found\r\n"
+#define HTTP_411_LR "HTTP/1.0 411 Length Required\r\n"
+#define HTTP_413_TL "HTTP/1.0 413 Request Entity Too Large\r\n"
+#define HTTP_503_SU "HTTP/1.0 503 Service Unavailable\r\n"
+#define CONN_CLOSE  "Connection: close\r\n"
+/*---------------------------------------------------------------------------*/
+#define CONTENT_OPEN  "<pre>"
+#define CONTENT_CLOSE "</pre>"
+/*---------------------------------------------------------------------------*/
+/* Page template */
+ static const char http_header_200[] = HTTP_200_OK;
+ static const char http_header_302[] = HTTP_302_FO;
+ static const char http_header_400[] = HTTP_400_BR;
+ static const char http_header_404[] = HTTP_404_NF;
+ static const char http_header_411[] = HTTP_411_LR;
+ static const char http_header_413[] = HTTP_413_TL;
+ static const char http_header_503[] = HTTP_503_SU;
+
 typedef struct httpd_simple_post_handler {
   struct httpd_simple_post_handler *next;
   int (*handler)(char *key, int key_len, char *val, int val_len);
