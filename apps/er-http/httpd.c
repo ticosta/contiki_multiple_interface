@@ -60,7 +60,7 @@
 
 #include "er-http.h"
 
-#define DEBUG 0
+#define DEBUG 1
 #if DEBUG
 #define PRINTF(...) printf(__VA_ARGS__)
 #define PRINT6ADDR(addr) PRINTF("[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7], ((uint8_t *)addr)[8], ((uint8_t *)addr)[9], ((uint8_t *)addr)[10], ((uint8_t *)addr)[11], ((uint8_t *)addr)[12], ((uint8_t *)addr)[13], ((uint8_t *)addr)[14], ((uint8_t *)addr)[15])
@@ -345,7 +345,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 						http_header_con_close
 					)
 				);
-        if(s->response.status >= 200 && s->response.status <= 299){
+        /*if(s->response.status >= 200 && s->response.status <= 299){
             PT_WAIT_THREAD(&s->outputpt,
                            enqueue_chunk(
                                    s,
@@ -356,7 +356,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
         }else{
             uip_close();
             PT_EXIT(&s->outputpt);
-        }
+        }*/
 
 	  }/*else {
 		PT_WAIT_THREAD(
@@ -567,12 +567,19 @@ parse_coap(coap_client_request_t *coap_request, httpd_state *s){
         memcpy(s->response.buf, coap_request->buffer, coap_request->blen);
         s->response.blen = coap_request->blen;
     }
-
+    //s->response.status = coap_request->status_code;
+    //TODO: nao esquecer
+    if(coap_request->status_code == CONTENT_2_05){
+        s->response.status = 200;
+    }
     s->request_type = coap_request->method;
+
+    //TODO: pode nao ser 200
+    s->response.status_str = http_header_200;
+    memcpy(s->response.content_type, "text/plain", strlen("text/plain"));
     //s->return_code = coap_requ TODO:
 
     s->currentConnection = coap_request->connection;
-
 
 
 }
@@ -677,6 +684,7 @@ PROCESS_THREAD(httpd_process, ev, data)
 
   while(1) {
     PROCESS_WAIT_EVENT_UNTIL(ev == tcpip_event || ev == PROCESS_EVENT_CUSTOM);
+
     if(ev == tcpip_event){
         appcall(data);
     }else if(ev == PROCESS_EVENT_CUSTOM){
