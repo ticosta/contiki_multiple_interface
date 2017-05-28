@@ -74,17 +74,19 @@
 #define SEND_STRING(s, str) PSOCK_SEND(s, (uint8_t *)str, strlen(str))
 /*---------------------------------------------------------------------------*/
 #define CONNS                2
-#define CONTENT_LENGTH_MAX 256
-#define STATE_WAITING        0
-#define STATE_OUTPUT         1
-#define IPADDR_BUF_LEN      64
+#define CONTENT_LENGTH_MAX   256
+#define STATE_WAITING        0x1
+#define STATE_OUTPUT         0x2
+#define STATE_PROCESSED      0x4
+#define STATE_RES_FOUND      0x8
+#define IPADDR_BUF_LEN       64
 /*---------------------------------------------------------------------------*/
 /* POST request machine states */
 #define PARSE_POST_STATE_INIT            0
 #define PARSE_POST_STATE_MORE            1
 #define PARSE_POST_STATE_READING_KEY     2
 #define PARSE_POST_STATE_READING_VAL     3
-#define PARSE_POST_STATE_ERROR 0xFFFFFFFF
+#define PARSE_POST_STATE_ERROR           0xFFFFFFFF
 /*---------------------------------------------------------------------------*/
 /*
  * We can only handle a single POST request at a time. Since a second POST
@@ -246,14 +248,14 @@ PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
 /*---------------------------------------------------------------------------*/
 
 static
-PT_THREAD(handle_output(httpd_state *s, int resourse_found))
+PT_THREAD(handle_output(httpd_state *s))
 {
   PT_BEGIN(&s->outputpt);
 
   PT_INIT(&s->generate_pt); /* TODO ver isso */
 
   /* Send a Not Found status */
-  if(!resourse_found) {
+  if(!(s->state & STATE_RES_FOUND) && (s->return_code == RETURN_CODE_OK)) {
       PT_WAIT_THREAD(&s->outputpt, send_headers(s, http_header_404,
                                                 http_content_type_txt_html,
                                                 NULL,
@@ -286,7 +288,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_411,
-					  s->response.content_type,
+					  http_content_type_txt_html,
 					  NULL,
 					  http_header_con_close
 				  )
@@ -298,7 +300,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_413,
-					  s->response.content_type,
+					  http_content_type_txt_html,
 					  NULL,
 					  http_header_con_close
 				  )
@@ -310,7 +312,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_503,
-					  s->response.content_type,
+					  http_content_type_txt_html,
 					  NULL,
 					  http_header_con_close
 				  )
@@ -322,7 +324,7 @@ PT_THREAD(handle_output(httpd_state *s, int resourse_found))
 			  send_headers(
 					  s,
 					  http_header_400,
-					  s->response.content_type,
+					  http_content_type_txt_html,
 					  NULL,
 					  http_header_con_close
 				  )
@@ -362,6 +364,8 @@ static char * ptr_toWrite;
 static
 PT_THREAD(handle_input(httpd_state *s))
 {
+  PRINTF("** Processing Input.\n");
+
   PSOCK_BEGIN(&s->sin);
 
   PSOCK_READTO(&s->sin, ISO_space);
@@ -529,19 +533,46 @@ PT_THREAD(handle_input(httpd_state *s))
 static void
 handle_connection(httpd_state *s)
 {
-  handle_input(s);
-  if(s->state == STATE_OUTPUT) {
-	rest_select_if(HTTP_IF);
+  int res_found = 0;
+
+  PRINTF("** Handle Connection\n");
+  if(!(s->state & STATE_OUTPUT)) {
+	  handle_input(s);
+  }
+
+  if(s->state & STATE_OUTPUT) {
 	/* By default, all endpoints have an immediate response */
 	s->response.imediate_response = 1;
+	rest_select_if(HTTP_IF);
 
-	PRINTF("\n** Calling Service Callback\n");
-	int res_found = service_cbk(s, &s->response, (uint8_t *)&s->response.buf, 0, 0);
+	/* have already call service callback for this request? */
+	if(!(s->state & STATE_PROCESSED)) {
 
-	PRINTF("\n** State: %d, res_found = %d, Immediate: %d\n", s->return_code, res_found, s->response.imediate_response);
+		/* call service callback only if received data is correct */
+		if(s->return_code == RETURN_CODE_OK) {
+			PRINTF("** Calling Service Callback\n");
+			//
+			res_found = service_cbk(s, &s->response, (uint8_t *)&s->response.buf, 0, 0);
+			// Update the request state
+			if(res_found) {
+				s->state |= STATE_RES_FOUND;
+			}
+		} else {
+			PRINTF("** Received data NOK!\n");
+			/* Force Resource Found to make handle_output process the error */
+			s->state |= STATE_RES_FOUND;
+		}
 
+		s->state |= STATE_PROCESSED;
+
+		PRINTF("\n** State: %d, res_found = %d, Immediate: %d\n", s->return_code, res_found, s->response.imediate_response);
+	} else {
+		PRINTF("** Request already processed: %d\n", s->state);
+	}
+
+	//
 	if(s->response.imediate_response){
-	    handle_output(s, res_found);
+	    handle_output(s);
 	}
   }
 }
@@ -604,7 +635,9 @@ proxy_call(void *state){
     s->state = STATE_WAITING;
 
     timer_set(&s->timer, CLOCK_SECOND * 10);
-    handle_output(s, 1);
+
+    s->state |= STATE_RES_FOUND;
+    handle_output(s);
 
 }
 /*---------------------------------------------------------------------------*/
@@ -674,6 +707,7 @@ PROCESS_THREAD(httpd_process, ev, data)
     PROCESS_WAIT_EVENT_UNTIL(ev == tcpip_event || ev == PROCESS_EVENT_CUSTOM);
 
     if(ev == tcpip_event){
+    	PRINTF("** PROCESS WHILE!\n");
         appcall(data);
     }else if(ev == PROCESS_EVENT_CUSTOM){
         proxy_call(data);
