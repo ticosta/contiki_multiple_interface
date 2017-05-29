@@ -5,6 +5,9 @@
  *      Author: user
  */
 
+#include <stdlib.h>
+#include <stdio.h>
+
 #include "contiki.h"
 
 #include "httpd.h"
@@ -23,6 +26,13 @@
 #define PRINTLLADDR(addr)
 #endif
 
+
+/*---------------------------------------------------------------------------*/
+/* Used to temporarily stores content-length as ASCII.
+ * Assumes that this value never exceeds 9999 Bytes PLUS null terminator. */
+#define CONTENT_LENGTH_BUFF_SIZE                   5
+static char content_len_buf[CONTENT_LENGTH_BUFF_SIZE];
+/*---------------------------------------------------------------------------*/
 static int
 http_get_variable(const char *buffer, size_t length, const char *name,
                   const char **output);
@@ -39,6 +49,33 @@ int http_set_additional_headers(void *request, const void **headers) {
 	http_pkt->response.additional_hdrs = (const char **)headers;
 	return 1;
 }
+
+// 18 -> Content-Length:%s\r\n
+#define CLEN_HDR_BUF_SIZE             18 + CONTENT_LENGTH_BUFF_SIZE
+static char clength_hdr_buff[CLEN_HDR_BUF_SIZE];
+void * build_header_content_length(void *request, int len) {
+	itoa(len, content_len_buf, 10);
+	snprintf(clength_hdr_buff, CLEN_HDR_BUF_SIZE, http_header_content_legth, content_len_buf);
+
+	return clength_hdr_buff;
+}
+/* -------------------------- Error status function ----------------------- */
+const char **add_hdrs[] = {NULL, NULL};
+void set_http_error(void *request, char *err, unsigned int status) {
+	((httpd_state *)request)->response.immediate_response = 1;
+	//
+	int len = snprintf(error_buffer, ERROR_BUFFER_SIZE, error_template, err);
+	REST.set_response_payload(request, error_buffer, len);
+	REST.set_header_content_type(request, REST.type.APPLICATION_JSON);
+	REST.set_response_status(request, status);
+	// Additional header Content-Length
+	add_hdrs[0] = build_header_content_length(request, len);
+	http_set_additional_headers(request, (const void **)add_hdrs);
+}
+/*---------------------------------------------------------------------------*/
+
+
+
 
 int http_set_redir_path(void *request, const void *path) {
 	httpd_state *const http_pkt = (httpd_state *)request;
@@ -337,7 +374,7 @@ http_get_variable(const char *buffer, size_t length, const char *name,
       /* Point end to the end of the value */
       value_end = (const char *)memchr(start, '&', end - start);
       if(value_end == NULL) {
-        value_end = end;
+        value_end = end - 1;
       }
       *output = start;
 

@@ -110,6 +110,13 @@ static const char *NOT_FOUND = "<html><body bgcolor=\"white\">"
                                "</center>"
                                "</body>"
                                "</html>";
+/*---------------------------------------------------------------------------*/
+/* Default Content-Type */
+const char *default_content_type = http_content_type_txt_html;
+/*---------------------------------------------------------------------------*/
+process_event_t coap_client_event_new_response;
+/*---------------------------------------------------------------------------*/
+
 
 static const char *http_header_srv_str[] = {
   "Server: Contiki, ",
@@ -121,18 +128,6 @@ static const char *http_header_con_close[] = {
   CONN_CLOSE,
   NULL
 };
-LIST(post_handlers);
-void
-httpd_simple_register_post_handler(httpd_simple_post_handler_t *h)
-{
-	PRINTF("Passei por aqui\n");
-  list_add(post_handlers, h);
-}
-
-/*---------------------------------------------------------------------------*/
-//static const httpd_simple_post_handler_t *handler;
-/*---------------------------------------------------------------------------*/
-
 
 MEMB(conns, httpd_state, CONNS);
 /*---------------------------------------------------------------------------*/
@@ -144,7 +139,7 @@ void http_set_service_callback(service_callback_t callback) {
 	service_cbk = callback;
 }
 
-/* Envia Bocados */
+
 static
 PT_THREAD(enqueue_chunk(httpd_state *s, uint8_t immediate,
                         const char *format, ...))
@@ -277,7 +272,7 @@ PT_THREAD(handle_output(httpd_state *s))
 			  send_headers(
 					  s,
 					  s->response.status,
-					  s->response.content_type,
+					  (s->response.content_type == 0)? default_content_type : s->response.content_type,
 					  s->response.redir_path,
 					  s->response.additional_hdrs
 			  )
@@ -342,12 +337,15 @@ PT_THREAD(handle_output(httpd_state *s))
 			  send_headers(
 					  s,
 					  s->response.status,
-					  s->response.content_type,
+					  (s->response.content_type == 0)? default_content_type : s->response.content_type,
 					  NULL,
-					  http_header_con_close
+					  s->response.additional_hdrs
 			  ));
 
 	/* Send response body */
+	// Guarantees the null terminator
+    int idx = MIN(s->response.blen, HTTPD_SIMPLE_MAIN_BUF_SIZE - 1);
+    s->response.buf[idx] = ISO_null_term;
 	PT_WAIT_THREAD(&s->outputpt, send_string(s, s->response.buf));
 //	PT_WAIT_THREAD(
 //			&s->outputpt,
@@ -542,7 +540,7 @@ handle_connection(httpd_state *s)
 
   if(s->state & STATE_OUTPUT) {
 	/* By default, all endpoints have an immediate response */
-	s->response.imediate_response = 1;
+	s->response.immediate_response = 1;
 	rest_select_if(HTTP_IF);
 
 	/* have already call service callback for this request? */
@@ -565,13 +563,13 @@ handle_connection(httpd_state *s)
 
 		s->state |= STATE_PROCESSED;
 
-		PRINTF("\n** State: %d, res_found = %d, Immediate: %d\n", s->return_code, res_found, s->response.imediate_response);
+		PRINTF("\n** State: %d, res_found = %d, Immediate: %d\n", s->return_code, res_found, s->response.immediate_response);
 	} else {
 		PRINTF("** Request already processed: %d\n", s->state);
 	}
 
 	//
-	if(s->response.imediate_response){
+	if(s->response.immediate_response){
 	    handle_output(s);
 	}
   }
@@ -596,9 +594,8 @@ parse_coap(coap_client_request_t *coap_request, httpd_state *s){
     s->response.content_type = http_content_type_txt_plain;
     //s->return_code = coap_requ TODO:
 
-    s->currentConnection = coap_request->connection;
 
-
+    tcp_markconn(coap_request->http_conn, s);
 }
 
 static void reset_http_state_obj(httpd_state *s) {
@@ -606,6 +603,7 @@ static void reset_http_state_obj(httpd_state *s) {
     s->tmp_buf_len = 0;
     s->response.blen = 0;
 	s->response.additional_hdrs = 0;
+	s->response.content_type = 0;
 	s->response.redir_path = 0;
     memset(s->buffer, 0, sizeof(s->buffer));
 }
@@ -625,7 +623,6 @@ proxy_call(void *state){
         uip_abort();
         return;
     }
-    tcp_markconn(s->currentConnection, s);
 
     //PSOCK_INIT(&s->sin, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
     PSOCK_INIT(&s->sout, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
@@ -646,6 +643,8 @@ appcall(void *state)
 {
   httpd_state *s = (httpd_state *)state;
 
+  // TODO: Correr a lista de portas e ver quandas estão livres ao sim de uma serie de pedidos HTTP.
+  // Não sei se estão a ser libertadas...
   if(uip_closed() || uip_aborted() || uip_timedout()) {
 	if(s != NULL) {
 		reset_http_state_obj(s);
@@ -665,8 +664,6 @@ appcall(void *state)
 
 	  s->state = STATE_WAITING;
 
-	  s->currentConnection = uip_conn;
-
 	  timer_set(&s->timer, CLOCK_SECOND * 10);
 	  handle_connection(s);
 
@@ -679,13 +676,13 @@ appcall(void *state)
 	} else {
 	    timer_restart(&s->timer);
 	}
-	    handle_connection(s);
+
+	handle_connection(s);
   } else {
         uip_abort();
     }
 }
 /*---------------------------------------------------------------------------*/
-
 static void
 init(void)
 {
@@ -696,20 +693,23 @@ init(void)
 PROCESS_THREAD(httpd_process, ev, data)
 {
   PROCESS_BEGIN();
-  PRINTF("Web Server\n");
+  PRINTF("* Web Server starting...\n");
 
-  // TODO: ?
-  //httpd_simple_event_new_config = process_alloc_event();
+  // Get an Event Id
+  coap_client_event_new_response = process_alloc_event();
 
   init();
 
+  //PROCESS_PAUSE();
+
   while(1) {
-    PROCESS_WAIT_EVENT_UNTIL(ev == tcpip_event || ev == PROCESS_EVENT_CUSTOM);
+    PROCESS_WAIT_EVENT_UNTIL(ev == tcpip_event || ev == coap_client_event_new_response);
 
     if(ev == tcpip_event){
-    	PRINTF("** PROCESS WHILE!\n");
+    	PRINTF("**TODO PROCESS WHILE!\n");
         appcall(data);
-    }else if(ev == PROCESS_EVENT_CUSTOM){
+    }else if(ev == coap_client_event_new_response){
+    	PRINTF("**TODO coap_client_event_new_response!\n");
         proxy_call(data);
     }
 

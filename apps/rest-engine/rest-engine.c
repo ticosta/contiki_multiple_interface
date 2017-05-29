@@ -46,13 +46,6 @@
 struct rest_implementation *_rest_interface[2];
 int rest_engine_if_selector = 0;
 
-struct ttt {
-	int a;
-	int b;
-};
-
-struct ttt testet[2];
-
 
 #define DEBUG 1
 #if DEBUG

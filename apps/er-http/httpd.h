@@ -39,6 +39,8 @@
 #ifndef HTTPD_SIMPLE_H_
 #define HTTPD_SIMPLE_H_
 
+#include "error_codes.h"
+
 /*---------------------------------------------------------------------------*/
 #define ISO_nl									0x0A
 #define ISO_space								0x20
@@ -48,10 +50,10 @@
 #define ISO_equal								0x3D
 #define ISO_null_term							0x00
 /*---------------------------------------------------------------------------*/
-// POST key max bytes -> After parsed
-#define POST_PARAMS_KEY_MAX_LEN					10
-// POST val max bytes -> After parsed
-#define POST_PARAMS_VAL_MAX_LEN					10
+// POST key max bytes -> After parsed. Count with null terminator
+#define POST_PARAMS_KEY_MAX_LEN					11
+// POST val max bytes -> After parsed. Count with null terminator
+#define POST_PARAMS_VAL_MAX_LEN					11
 /*---------------------------------------------------------------------------*/
 /**
  * HTTP Status Headers
@@ -69,7 +71,8 @@
 #define HTTP_503_SU       "HTTP/1.0 503 Service Unavailable\r\n"
 #define HTTP_DUMMY_STATUS "HTTP/1.0 999 Dummy Status\r\n"
 /*---------------------------------------------------------------------------*/
-#define CONN_CLOSE        "Connection: close\r\n"
+#define CONN_CLOSE                         "Connection: close\r\n"
+#define HTTP_CONTENT_LENGTH_TEMPLATE       "Content-Length:%s\r\n"
 /*---------------------------------------------------------------------------*/
 #define HTTP_CONTENT_TYPE_TEXT_PLAIN            "text/plain"
 #define HTTP_CONTENT_TYPE_TEXT_HTML             "text/html"
@@ -99,6 +102,8 @@ static const char http_header_500[] = HTTP_500_ISR;
 static const char http_header_503[] = HTTP_503_SU;
 static const char http_header_999[] = HTTP_DUMMY_STATUS;
 /*---------------------------------------------------------------------------*/
+static const char http_header_content_legth[] = HTTP_CONTENT_LENGTH_TEMPLATE;
+/*---------------------------------------------------------------------------*/
 
 /* HTTP response codes */
 /* Mapping to CoAP - https://tools.ietf.org/id/draft-ietf-core-http-mapping-07.html */
@@ -125,5 +130,8 @@ typedef enum {
   DUMMY_STATUS_999 =                     999         /* Used for unimplemented status codes and to help the debug */
 } http_status_t;
 
+
+// Event sent by CoAP client with node's response
+extern process_event_t coap_client_event_new_response;
 
 #endif /* HTTPD_SIMPLE_H_ */

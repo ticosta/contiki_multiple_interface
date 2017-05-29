@@ -75,7 +75,7 @@ typedef struct http_response_t {
 	const char * status;
 	const char **additional_hdrs;
 	const char * redir_path;
-	char imediate_response;
+	char immediate_response;
 } http_response;
 
 /*---------------------------------------------------------------------------*/
@@ -111,10 +111,12 @@ typedef struct  {
   http_response response;
   char buffer[MAX_PAYLOAD_SIZE];
   // ip address of dest node
-  char *dst_ipaddr;
+  uint8_t *dst_ipaddr;
+  // Used to pass the URI for CoAP client
+  // Here URI means the action parameter in a POST request to the CoAP nodes
   char *action;
+  // without null terminator
   uint16_t action_len;
-  struct uip_conn * currentConnection;
 }httpd_state, http_packet_t ;
 /*---------------------------------------------------------------------------*/
 
@@ -132,6 +134,12 @@ int http_set_additional_headers(void *request, const void **headers);
 
 /** Used by end-points to set redir path. Interpreted by httpd. */
 int http_set_redir_path(void *request, const void *path);
+
+/** build the additional Content-Length header. */
+void * build_header_content_length(void *request, int len);
+
+/** Prepare an HTTP response with the specified error and status. */
+void set_http_error(void *request, char *err, unsigned int status);
 
 /*---------------------------------------------------------------------------*/
 /*
