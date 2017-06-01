@@ -39,7 +39,6 @@
 #ifndef ER_COAP_H_
 #define ER_COAP_H_
 
-#include "coap_client.h"
 #include <stddef.h> /* for size_t */
 #include "contiki-net.h"
 #include "er-coap-constants.h"
@@ -128,7 +127,7 @@ typedef struct {
   uint8_t if_none_match;
 
   uint16_t payload_len;
-  coap_client_request_t *user_data;
+  //coap_client_request_t *user_data;
   uint8_t *payload;
 } coap_packet_t;
 

@@ -17,10 +17,6 @@
 #define ETH_ND6_REACHABLE_TIME		UIP_ND6_REACHABLE_TIME
 #define ETH_ND6_RETRANS_TIMER		UIP_ND6_RETRANS_TIMER
 #define ETH_ND6_DEF_MAXDADNS		UIP_ND6_DEF_MAXDADNS
-// Used to make eth ll address different from radio interface
-#define IP_LINK_LOCAL_PREFIX_BYTE	(0x21)
-//
-#define IPV6_CONF_ADDR_8			0xA
 
 
 /* The ethernet MAC address*/

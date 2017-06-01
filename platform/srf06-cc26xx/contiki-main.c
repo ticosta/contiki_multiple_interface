@@ -135,7 +135,6 @@ set_rf_params(void)
   short_addr = ext_addr[7];
   short_addr |= ext_addr[6] << 8;
 
-#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
   /* In case the OUI contain a broadcast bit, we mask that out here. */
   ext_addr[0] = (ext_addr[0] & 0xfe);
   /* Set the U/L bit, in order to create a locally administered MAC address
@@ -145,6 +144,8 @@ set_rf_params(void)
   // Just to make it compatible with our ethernet translation.
   ext_addr[3] = 0xFF;
   ext_addr[4] = 0xFE;
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
   translate_lowpan_to_eth(&ethernet_if_addr, (uip_lladdr_t *)&ext_addr);
 #endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
@@ -217,7 +218,7 @@ if(!UIP_CONF_IPV6_RPL) {
   uip_ip6addr(&ipaddr, UIP_DS6_DEFAULT_PREFIX, 0, 0, 0, 0, 0, 0, IPV6_CONF_ADDR_8);
   //uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr);
   uip_ds6_addr_add(&ipaddr, 0, ADDR_TENTATIVE);
-  printf("* Ethernet: Tentative global IPv6 address ");
+  printf("* Ethernet: Tentative site IPv6 address ");
   for(i = 0; i < 7; ++i) {
 	  printf("%02x%02x:",
 		   ipaddr.u8[i * 2], ipaddr.u8[i * 2 + 1]);

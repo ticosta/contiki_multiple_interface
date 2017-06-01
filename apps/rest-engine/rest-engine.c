@@ -100,6 +100,7 @@ rest_init_engine(void)
   /* Start the RESTful server implementation. */
   REST.init();
 
+  rest_select_if(COAP_IF);
   /*Start REST engine process */
   process_start(&rest_engine_process, NULL);
 }
