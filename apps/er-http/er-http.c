@@ -102,7 +102,11 @@ rest_resource_flags_t http_get_rest_method(void *request) {
 	                                 (http_pkt->request_type - 1));
 }
 
-/** Set the status code of a response. */
+/** Set the status code of a response.
+ * It maps HTTP and CoAP codes to an HTTP status.
+ * The mapping for CoAP only map status codes with just one map code to HTTP.
+ *
+ * Based on https://tools.ietf.org/html/draft-ietf-core-http-mapping-17#section-7 */
 int http_set_status_code(void *response, unsigned int code) {
     httpd_state *const http_pkt = (httpd_state *)response;
     const char * hdr_ptr;
@@ -110,6 +114,7 @@ int http_set_status_code(void *response, unsigned int code) {
     switch(code) {
 	/* ------  2xx  ------ */
     case OK_200:
+    case CONTENT_2_05:
     	hdr_ptr = http_header_200;
     	break;
 
@@ -121,12 +126,15 @@ int http_set_status_code(void *response, unsigned int code) {
 
 	/* ------  4xx  ------ */
     case BAD_REQUEST_400:
+    case BAD_REQUEST_4_00:
     	hdr_ptr = http_header_400;
     	break;
     case FORBIDDEN_403:
+    case FORBIDDEN_4_03:
     	hdr_ptr = http_header_403;
     	break;
     case NOT_FOUND_404:
+    case NOT_FOUND_4_04:
     	hdr_ptr = http_header_404;
     	break;
     case METHOD_NOT_ALLOWED_405:
@@ -136,14 +144,17 @@ int http_set_status_code(void *response, unsigned int code) {
     	hdr_ptr = http_header_411;
     	break;
     case REQUEST_ENTITY_TL_413:
+    case REQUEST_ENTITY_TOO_LARGE_4_13:
     	hdr_ptr = http_header_413;
     	break;
 
 	/* ------  5xx  ------ */
     case INTERNAL_SERVER_ERROR_500:
+    case INTERNAL_SERVER_ERROR_5_00:
     	hdr_ptr = http_header_500;
     	break;
     case SERVICE_UNAVAILABLE_503:
+    case SERVICE_UNAVAILABLE_5_03:
     	hdr_ptr = http_header_503;
     	break;
 
@@ -154,7 +165,8 @@ int http_set_status_code(void *response, unsigned int code) {
     	break;
 
     default:
-    	return 0;
+    	hdr_ptr = http_header_998;
+    	break;
     }
 
     http_pkt->response.status = hdr_ptr;

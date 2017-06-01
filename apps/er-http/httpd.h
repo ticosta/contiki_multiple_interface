@@ -39,6 +39,7 @@
 #ifndef HTTPD_SIMPLE_H_
 #define HTTPD_SIMPLE_H_
 
+#include "process.h"
 #include "error_codes.h"
 
 /*---------------------------------------------------------------------------*/
@@ -46,9 +47,14 @@
 #define ISO_space								0x20
 #define ISO_slash								0x2F
 #define ISO_amp									0x26
+#define ISO_semi_colon							0x3B
 #define ISO_column								0x3A
 #define ISO_equal								0x3D
 #define ISO_null_term							0x00
+/*---------------------------------------------------------------------------*/
+/* It SHOULD be higher the 15 to avoid retries from requesters because
+ * uIP close the connection after 15~ seconds after no activity. */
+#define ABORT_CONN_TIMEOUT                      20
 /*---------------------------------------------------------------------------*/
 // POST key max bytes -> After parsed. Count with null terminator
 #define POST_PARAMS_KEY_MAX_LEN					11
@@ -67,18 +73,19 @@
 /**
  * HTTP Status Headers
  */
-#define HTTP_200_OK       "HTTP/1.0 200 OK\r\n"
+#define HTTP_200_OK                "HTTP/1.0 200 OK\r\n"
 /* NOTE: Has no direct mapping to CoAP status codes */
-#define HTTP_302_FO       "HTTP/1.0 302 Found\r\n"
-#define HTTP_400_BR       "HTTP/1.0 400 Bad Request\r\n"
-#define HTTP_403_FB       "HTTP/1.0 403 Forbidden\r\n"
-#define HTTP_404_NF       "HTTP/1.0 404 Not Found\r\n"
-#define HTTP_405_MNA      "HTTP/1.0 405 Method Not Allowed\r\n"
-#define HTTP_411_LR       "HTTP/1.0 411 Length Required\r\n"
-#define HTTP_413_TL       "HTTP/1.0 413 Request Entity Too Large\r\n"
-#define HTTP_500_ISR      "HTTP/1.0 500 Internal Server Error\r\n"
-#define HTTP_503_SU       "HTTP/1.0 503 Service Unavailable\r\n"
-#define HTTP_DUMMY_STATUS "HTTP/1.0 999 Dummy Status\r\n"
+#define HTTP_302_FO                "HTTP/1.0 302 Found\r\n"
+#define HTTP_400_BR                "HTTP/1.0 400 Bad Request\r\n"
+#define HTTP_403_FB                "HTTP/1.0 403 Forbidden\r\n"
+#define HTTP_404_NF                "HTTP/1.0 404 Not Found\r\n"
+#define HTTP_405_MNA               "HTTP/1.0 405 Method Not Allowed\r\n"
+#define HTTP_411_LR                "HTTP/1.0 411 Length Required\r\n"
+#define HTTP_413_TL                "HTTP/1.0 413 Request Entity Too Large\r\n"
+#define HTTP_500_ISR               "HTTP/1.0 500 Internal Server Error\r\n"
+#define HTTP_503_SU                "HTTP/1.0 503 Service Unavailable\r\n"
+#define HTTP_NOT_MAPPED_OR_UNKNOWN "HTTP/1.0 998 Not Mapped or Unknown\r\n"
+#define HTTP_DUMMY_STATUS          "HTTP/1.0 999 Dummy Status\r\n"
 /*---------------------------------------------------------------------------*/
 #define CONN_CLOSE                         "Connection: close\r\n"
 #define HTTP_CONTENT_LENGTH_TEMPLATE       "Content-Length:%s\r\n"
@@ -109,6 +116,7 @@ static const char http_header_411[] = HTTP_411_LR;
 static const char http_header_413[] = HTTP_413_TL;
 static const char http_header_500[] = HTTP_500_ISR;
 static const char http_header_503[] = HTTP_503_SU;
+static const char http_header_998[] = HTTP_NOT_MAPPED_OR_UNKNOWN;
 static const char http_header_999[] = HTTP_DUMMY_STATUS;
 /*---------------------------------------------------------------------------*/
 static const char http_header_content_legth[] = HTTP_CONTENT_LENGTH_TEMPLATE;

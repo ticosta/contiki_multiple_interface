@@ -77,7 +77,20 @@ typedef struct http_response_t {
 	const char * redir_path;
 	char immediate_response;
 } http_response;
-
+/*---------------------------------------------------------------------------*/
+typedef struct coap_request_params_t {
+	// ip address of dest node
+	  uint8_t *dst_ipaddr;
+	  // Used to pass the URI for CoAP client
+	  // Here URI means the action parameter in a POST request to the CoAP nodes
+	  char *action;
+	  // without null terminator
+	  uint16_t action_len;
+	  //
+	  char *params;
+	  // without null terminator
+	  uint16_t params_len;
+} coap_request_params;
 /*---------------------------------------------------------------------------*/
 /* http request struct */
 typedef struct  {
@@ -110,13 +123,8 @@ typedef struct  {
   // response
   http_response response;
   char buffer[MAX_PAYLOAD_SIZE];
-  // ip address of dest node
-  uint8_t *dst_ipaddr;
-  // Used to pass the URI for CoAP client
-  // Here URI means the action parameter in a POST request to the CoAP nodes
-  char *action;
-  // without null terminator
-  uint16_t action_len;
+  //
+  coap_request_params coap_req;
 }httpd_state, http_packet_t ;
 /*---------------------------------------------------------------------------*/
 
