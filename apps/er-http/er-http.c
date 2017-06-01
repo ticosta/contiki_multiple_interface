@@ -97,6 +97,7 @@ int http_get_header_uri_path(void *request, const char **path) {
 rest_resource_flags_t http_get_rest_method(void *request) {
 	httpd_state *const http_pkt = (httpd_state *)request;
 
+	// TODO: isto não é verdade
 	return (rest_resource_flags_t)(1 <<
 	                                 (http_pkt->request_type - 1));
 }

@@ -73,14 +73,6 @@
 /*---------------------------------------------------------------------------*/
 #define SEND_STRING(s, str) PSOCK_SEND(s, (uint8_t *)str, strlen(str))
 /*---------------------------------------------------------------------------*/
-#define CONNS                2
-#define CONTENT_LENGTH_MAX   256
-#define STATE_WAITING        0x1
-#define STATE_OUTPUT         0x2
-#define STATE_PROCESSED      0x4
-#define STATE_RES_FOUND      0x8
-#define IPADDR_BUF_LEN       64
-/*---------------------------------------------------------------------------*/
 /* POST request machine states */
 #define PARSE_POST_STATE_INIT            0
 #define PARSE_POST_STATE_MORE            1
@@ -179,25 +171,6 @@ PT_THREAD(enqueue_chunk(httpd_state *s, uint8_t immediate,
   PSOCK_END(&s->sout);
 }
 
-
-/*---------------------------------------------------------------------------
-static void
-lock_obtain(httpd_state *s)
-{
-  if(lock == NULL) {
-    lock = s;
-  }
-}*/
-/*---------------------------------------------------------------------------
-static void
-lock_release(httpd_state *s)
-{
-  if(lock == s) {
-    lock = NULL;
-  }
-}*/
-/*---------------------------------------------------------------------------*/
-
 /*---------------------------------------------------------------------------*/
 static
 PT_THREAD(send_string(httpd_state *s, const char *str))
@@ -247,7 +220,7 @@ PT_THREAD(handle_output(httpd_state *s))
 {
   PT_BEGIN(&s->outputpt);
 
-  PT_INIT(&s->generate_pt); /* TODO ver isso */
+  PT_INIT(&s->generate_pt);
 
   /* Send a Not Found status */
   if(!(s->state & STATE_RES_FOUND) && (s->return_code == RETURN_CODE_OK)) {
@@ -506,10 +479,6 @@ PT_THREAD(handle_input(httpd_state *s))
     //
     s->content_length = s->response.content_length;
     s->response.content_length = 0;
-
-    //TODO: ver isto
-    //lock_release(s);
-
   /* ---------------------------- Handle PUT ---------------------------- */
   } else if(strncasecmp(s->inputbuf, http_put, 4) == 0){
 
@@ -533,6 +502,11 @@ handle_connection(httpd_state *s)
 {
   int res_found = 0;
 
+  // TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  if(s->state & 0x800) {
+	  return;
+  }
+
   PRINTF("** Handle Connection\n");
   if(!(s->state & STATE_OUTPUT)) {
 	  handle_input(s);
@@ -541,7 +515,6 @@ handle_connection(httpd_state *s)
   if(s->state & STATE_OUTPUT) {
 	/* By default, all endpoints have an immediate response */
 	s->response.immediate_response = 1;
-	rest_select_if(HTTP_IF);
 
 	/* have already call service callback for this request? */
 	if(!(s->state & STATE_PROCESSED)) {
@@ -565,7 +538,7 @@ handle_connection(httpd_state *s)
 
 		PRINTF("\n** State: %d, res_found = %d, Immediate: %d\n", s->return_code, res_found, s->response.immediate_response);
 	} else {
-		PRINTF("** Request already processed: %d\n", s->state);
+		PRINTF("** Request already processed or CoAP response: %d\n", s->state);
 	}
 
 	//
@@ -578,24 +551,25 @@ handle_connection(httpd_state *s)
 static void
 parse_coap(coap_client_request_t *coap_request, httpd_state *s){
 
-    if(coap_request->method == COAP_GET){
-        memcpy(s->response.buf, coap_request->buffer, coap_request->blen);
-        s->response.blen = coap_request->blen;
-    }
+	memcpy(s->response.buf, coap_request->buffer, coap_request->blen);
+	s->response.blen = coap_request->blen;
+
+	// TODO: verificar como vem a resposta quando o servidor CoAP não responde
+
     //s->response.status = coap_request->status_code;
     //TODO: nao esquecer
 //    if(coap_request->status_code == CONTENT_2_05){
 //        s->response.status = 200;
 //    }
+	// get the original request method
     s->request_type = coap_request->method;
 
     //TODO: pode nao ser 200
-    s->response.status = http_header_200;
-    s->response.content_type = http_content_type_txt_plain;
+//    s->response.status = http_header_200;
+//    s->response.content_type = http_content_type_txt_plain;
+    REST.set_header_content_type(s, REST.type.TEXT_PLAIN);
+    REST.set_response_status(s, REST.status.OK);
     //s->return_code = coap_requ TODO:
-
-
-    tcp_markconn(coap_request->http_conn, s);
 }
 
 static void reset_http_state_obj(httpd_state *s) {
@@ -609,33 +583,35 @@ static void reset_http_state_obj(httpd_state *s) {
 }
 
 /*---------------------------------------------------------------------------*/
-static void
-proxy_call(void *state){
+static httpd_state *
+prepare_response(void *state){
     coap_client_request_t *coap_request = (coap_client_request_t *)state;
+    //httpd_state *s = (httpd_state *)memb_alloc(&conns);
 
-    httpd_state *s = (httpd_state *)memb_alloc(&conns);
+	uip_tcp_appstate_t *st = (uip_tcp_appstate_t *)&((struct uip_conn *)coap_request->http_conn)->appstate;
+	httpd_state *s = (httpd_state *)st->state;
 
-    reset_http_state_obj(s);
+
+
     /* Call Parse */
     parse_coap(coap_request, s);
+    // set the new state ready do send out
+    s->state = STATE_OUTPUT | STATE_PROCESSED | STATE_RES_FOUND;
 
-    if(s == NULL) {
-        uip_abort();
-        return;
-    }
+    // set our connection
+    // TODO: ver melhor aquela situação em que  este apontador pode apontar para uma conexão
+    // que pertence a outro pedido devido à "original" ter sido fechada pelo cliente ou dado timeout
+	tcp_markconn(coap_request->http_conn, s);
 
-    //PSOCK_INIT(&s->sin, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
-    PSOCK_INIT(&s->sout, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
+	/* init structures */
+	PSOCK_INIT(&s->sin, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
+	PSOCK_INIT(&s->sout, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
 
-    PT_INIT(&s->outputpt);
+	PT_INIT(&s->outputpt);
 
-    s->state = STATE_WAITING;
+	timer_set(&s->timer, CLOCK_SECOND * 10);
 
-    timer_set(&s->timer, CLOCK_SECOND * 10);
-
-    s->state |= STATE_RES_FOUND;
-    handle_output(s);
-
+	return s;
 }
 /*---------------------------------------------------------------------------*/
 static void
@@ -643,7 +619,7 @@ appcall(void *state)
 {
   httpd_state *s = (httpd_state *)state;
 
-  // TODO: Correr a lista de portas e ver quandas estão livres ao sim de uma serie de pedidos HTTP.
+  // TODO: Correr a lista de portas e ver quantas estão livres ao fim de uma serie de pedidos HTTP.
   // Não sei se estão a ser libertadas...
   if(uip_closed() || uip_aborted() || uip_timedout()) {
 	if(s != NULL) {
@@ -656,6 +632,8 @@ appcall(void *state)
 		  uip_abort();
 		  return;
 	  }
+	  // TODO: descomentar e confirmar que não dá problemas
+	  //reset_http_state_obj(s);
 	  tcp_markconn(uip_conn, s);
 	  PSOCK_INIT(&s->sin, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
 	  PSOCK_INIT(&s->sout, (uint8_t *)s->inputbuf, sizeof(s->inputbuf) - 1);
@@ -705,12 +683,18 @@ PROCESS_THREAD(httpd_process, ev, data)
   while(1) {
     PROCESS_WAIT_EVENT_UNTIL(ev == tcpip_event || ev == coap_client_event_new_response);
 
+    // select the REST HTTP interface
+    rest_select_if(HTTP_IF);
+
     if(ev == tcpip_event){
     	PRINTF("**TODO PROCESS WHILE!\n");
         appcall(data);
     }else if(ev == coap_client_event_new_response){
     	PRINTF("**TODO coap_client_event_new_response!\n");
-        proxy_call(data);
+
+    	// TODO: documentar e tal
+    	prepare_response(data);
+    	tcpip_poll_tcp(((coap_client_request_t *)data)->http_conn);
     }
 
   }

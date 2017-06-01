@@ -55,6 +55,15 @@
 // POST val max bytes -> After parsed. Count with null terminator
 #define POST_PARAMS_VAL_MAX_LEN					11
 /*---------------------------------------------------------------------------*/
+#define CONNS                2
+#define CONTENT_LENGTH_MAX   256
+#define STATE_WAITING        0x1
+#define STATE_OUTPUT         0x2
+#define STATE_PROCESSED      0x4
+#define STATE_RES_FOUND      0x8
+#define STATE_IGNORE         0x10 /* Useful when waiting for CoAP responses */
+#define IPADDR_BUF_LEN       64
+/*---------------------------------------------------------------------------*/
 /**
  * HTTP Status Headers
  */
