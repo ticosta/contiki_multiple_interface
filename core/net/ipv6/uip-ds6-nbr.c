@@ -256,6 +256,13 @@ uip_ds6_neighbor_periodic(void)
 {
   uip_ds6_nbr_t *nbr = nbr_table_head(ds6_neighbors);
   while(nbr != NULL) {
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	/* update only neighbors of the selected interface */
+	if(nbr->netif_idx != if_ds6_selector) {
+		nbr = nbr_table_next(ds6_neighbors, nbr);
+		continue;
+	}
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
     switch(nbr->state) {
     case NBR_REACHABLE:
       if(stimer_expired(&nbr->reachable)) {

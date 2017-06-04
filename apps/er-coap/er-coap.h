@@ -127,7 +127,6 @@ typedef struct {
   uint8_t if_none_match;
 
   uint16_t payload_len;
-  //coap_client_request_t *user_data;
   uint8_t *payload;
 } coap_packet_t;
 

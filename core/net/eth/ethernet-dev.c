@@ -21,7 +21,7 @@
 /*---------------------------------------------------------------------------*/
 static void build_ethaddr(const uip_lladdr_t *lladdr) {
 	// Destination is multicast?
-	if(IPBUF->destipaddr.u8[0] == 0xFF) {
+	if(IPBUF->destipaddr.u8[0] == 0xFF || lladdr == NULL) {
 	    /* Multicast. */
 		/* Build the destination address as defined by the RFC 2464 */
 		BASE_BUF->dest.addr[0] = 0x33;

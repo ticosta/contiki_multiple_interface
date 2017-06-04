@@ -348,6 +348,9 @@ void uip_ds6_prefix_rm(uip_ds6_prefix_t *prefix);
 uip_ds6_prefix_t *uip_ds6_prefix_lookup(uip_ipaddr_t *ipaddr,
                                         uint8_t ipaddrlen);
 uint8_t uip_ds6_is_addr_onlink(uip_ipaddr_t *ipaddr);
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+uint8_t uip_ds6_is_addr_on_what_link(uip_ipaddr_t *ipaddr, uint8_t *link);
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
 /** @} */
 

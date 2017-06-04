@@ -128,7 +128,8 @@ tcpip_output(const uip_lladdr_t *a)
   if(outputfunc != NULL) {
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
 	  PRINTF("* tcpip_output: Output interface selected: %d\n", if_ds6_selector);
-	  // get the neighbor
+	  /* if its unicast, need to get the right neighbor */
+	  /* get the neighbor */
 	  uip_ds6_nbr_t *nbr = uip_ds6_nbr_ll_lookup(a);
 	  if(nbr == NULL) {
 		  PRINTF("* tcpip_output: no Neighbor found for ll: ");
@@ -138,11 +139,13 @@ tcpip_output(const uip_lladdr_t *a)
 		  return 0;
 	  }
 
-	  // select the neighbor corresponding interface
+	  /* select the neighbor corresponding interface */
 	  uip_ds6_select_netif(nbr->netif_idx);
-	  PRINTF("* tcpip_output: With Neighbor: ");
+	  PRINTF("* tcpip_output: Sending packet with Neighbor: ");
 	  PRINT6ADDR(&nbr->ipaddr);
-	  PRINTF(" with interface %d\n", if_ds6_selector);
+	  PRINTF("\n");
+	  //}
+	  PRINTF("* tcpip_output: Sending packet on interface: %d\n", if_ds6_selector);
 
 	  ret = outputfunc[if_ds6_selector](a);
 #else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
@@ -500,6 +503,7 @@ eventhandler(process_event_t ev, process_data_t data)
 #if !UIP_CONF_ROUTER
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
 	int i;
+	int if_tmp = if_ds6_selector;
 	for(i = 0; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++) {
 		// select the right interface
 		uip_ds6_select_netif(i);
@@ -508,7 +512,7 @@ eventhandler(process_event_t ev, process_data_t data)
 	        etimer_expired((struct etimer *)&uip_ds6_timer_rs)) {
 	      uip_ds6_send_rs();
 	      tcpip_ipv6_output();
-	      break;
+	      continue;
 	    }
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
 	}
@@ -524,10 +528,12 @@ eventhandler(process_event_t ev, process_data_t data)
 			etimer_expired(&uip_ds6_timer_periodic)) {
 		  uip_ds6_periodic();
 		  tcpip_ipv6_output();
-		  break;
+		  continue;
 		}
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
     }
+	/* restore selected interface before the events */
+	uip_ds6_select_netif(if_tmp);
 #endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 #endif /* NETSTACK_CONF_WITH_IPV6 */
   }
@@ -629,9 +635,20 @@ tcpip_ipv6_output(void)
     /* We first check if the destination address is on our immediate
        link. If so, we simply use the destination address as our
        nexthop address. */
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+    /* when with multiple interfaces, need to select the right one
+       TODO: need to connect routes to interfaces and do the same
+       for uip_ds6_route_lookup() */
+    uint8_t link;
+    if(nexthop == NULL && uip_ds6_is_addr_on_what_link(&UIP_IP_BUF->destipaddr, &link)){
+      nexthop = &UIP_IP_BUF->destipaddr;
+      uip_ds6_select_netif(link);
+    }
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
     if(nexthop == NULL && uip_ds6_is_addr_onlink(&UIP_IP_BUF->destipaddr)){
       nexthop = &UIP_IP_BUF->destipaddr;
     }
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
     if(nexthop == NULL) {
       uip_ds6_route_t *route;

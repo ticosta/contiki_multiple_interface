@@ -428,7 +428,31 @@ uip_ds6_is_addr_onlink(uip_ipaddr_t *ipaddr)
 
   return 0;
 }
+/*---------------------------------------------------------------------------*/
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+uint8_t
+uip_ds6_is_addr_on_what_link(uip_ipaddr_t *ipaddr, uint8_t *link)
+{
+  uint8_t i;
+  uint8_t current_if = if_ds6_selector;
+  for(i = 0, if_ds6_selector = i; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++, if_ds6_selector = i) {
 
+     for(locprefix = uip_ds6_prefix_list;
+         locprefix < uip_ds6_prefix_list + UIP_DS6_PREFIX_NB; locprefix++) {
+       if(locprefix->isused &&
+          uip_ipaddr_prefixcmp(&locprefix->ipaddr, ipaddr, locprefix->length)) {
+
+    	 *link = if_ds6_selector;
+         if_ds6_selector = current_if;
+         return 1;
+       }
+     }
+  }
+
+  if_ds6_selector = current_if;
+  return 0;
+}
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 /*---------------------------------------------------------------------------*/
 uip_ds6_addr_t *
 uip_ds6_addr_add(uip_ipaddr_t *ipaddr, unsigned long vlifetime, uint8_t type)
