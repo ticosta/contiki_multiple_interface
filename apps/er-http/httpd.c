@@ -28,14 +28,16 @@
  * SUCH DAMAGE.
  *
  */
-/**
- * \addtogroup cc26xx-web-demo
- * @{
- *
- * \file
- *     A simple web server which displays network and sensor information
- */
 /*---------------------------------------------------------------------------*/
+
+/** @defgroup HTTP HTTP
+ * @{
+ */
+
+/** @addtogroup Server
+ * @{
+ */
+
 #include "contiki.h"
 #include "net/ip/uip.h"
 #include "net/ipv6/uip-ds6-route.h"
@@ -90,36 +92,35 @@
  * to the http conn which currently has the lock
  */
 /*---------------------------------------------------------------------------*/
-PROCESS(httpd_process, "Web Server");
+PROCESS(httpd_process, "Web Server"); /*!< Creates the Processhttpd_process with name Web Server */
 /*---------------------------------------------------------------------------*/
-static const char http_get[] = "GET ";
-static const char http_post[] = "POST ";
-static const char http_put[] = "PUT ";
+static const char http_get[] = "GET ";  /*!< String for method GET */
+static const char http_post[] = "POST "; /*!< String for method POST */
+static const char http_put[] = "PUT "; /*!< String for method PUT */
+static const char http_delete[] = "DELETE "; /*!< String for method DELETE */
 /*---------------------------------------------------------------------------*/
 static const char *NOT_FOUND = "<html><body bgcolor=\"white\">"
                                "<center>"
                                "<h1>404 - File Not Found</h1>"
                                "</center>"
                                "</body>"
-                               "</html>";
+                               "</html>"; /*!< String with template for NOT FOUND */
 /*---------------------------------------------------------------------------*/
-/* Default Content-Type */
-const char *default_content_type = http_content_type_txt_html;
+const char *default_content_type = http_content_type_txt_html; /*!< Default Content-Type */
 /*---------------------------------------------------------------------------*/
-process_event_t coap_client_event_new_response;
+process_event_t coap_client_event_new_response; /*!< Event for new response */
 /*---------------------------------------------------------------------------*/
-
 
 static const char *http_header_srv_str[] = {
   "Server: Contiki, ",
   BOARD_STRING "\r\n",
   NULL
-};
+}; /*!< Contains the head information of server */
 
 static const char *http_header_con_close[] = {
   CONN_CLOSE,
   NULL
-};
+}; /*!< Contains the head information for closing connection*/
 
 MEMB(conns, httpd_state, CONNS);
 /*---------------------------------------------------------------------------*/
@@ -127,11 +128,22 @@ MEMB(conns, httpd_state, CONNS);
 
 static service_callback_t service_cbk = NULL;
 
+/**
+ * @brief Sets the callback to be called
+ * @param callback : Callback to be called
+ * @return nothing
+ */
 void http_set_service_callback(service_callback_t callback) {
 	service_cbk = callback;
 }
 
-
+/**
+ * @brief Protothread for enqueue chunks to be transfered
+ * @param s : httpd_state struct to be used
+ * @param immediate :  Bit for immediate transfer
+ * @param format : Format string
+ * @return nothing
+ */
 static
 PT_THREAD(enqueue_chunk(httpd_state *s, uint8_t immediate,
                         const char *format, ...))
@@ -172,6 +184,13 @@ PT_THREAD(enqueue_chunk(httpd_state *s, uint8_t immediate,
 }
 
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @brief Protothread to send string
+ * @param s : httpd_state struct to be used
+ * @param str : String to be sent
+ * @return nothing
+ */
 static
 PT_THREAD(send_string(httpd_state *s, const char *str))
 {
@@ -182,6 +201,15 @@ PT_THREAD(send_string(httpd_state *s, const char *str))
   PSOCK_END(&s->sout);
 }
 
+/**
+ * @brief Protothread to send headers
+ * @param s : httpd_state struct to be used
+ * @param statushdr : Status of header
+ * @param content_type : Content-type to be used
+ * @param redir : Location for redirect | Optional
+ * @param additional : Additional payload to be sent | Optional
+ * @return nothing
+ */
 static
 PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
                        const char *content_type, const char *redir,
@@ -215,6 +243,11 @@ PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
 }
 /*---------------------------------------------------------------------------*/
 
+/**
+ * @brief Protothread to handle output
+ * @param s : httpd_state struct to be used
+ * @return nothing
+ */
 static
 PT_THREAD(handle_output(httpd_state *s))
 {
@@ -331,7 +364,14 @@ PT_THREAD(handle_output(httpd_state *s))
 }
 
 /*---------------------------------------------------------------------------*/
-static char * ptr_toWrite;
+
+static char * ptr_toWrite; /*!< Pointer to write in the buffer */
+
+/**
+ * @brief Protothread to handle input
+ * @param s : httpd_state struct to be used
+ * @return nothing
+ */
 static
 PT_THREAD(handle_input(httpd_state *s))
 {
@@ -484,6 +524,12 @@ PT_THREAD(handle_input(httpd_state *s))
   PSOCK_END(&s->sin);
 }
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @brief Handle a connection
+ * @param s : httpd_state struct to be used
+ * @return nothing
+ */
 static void
 handle_connection(httpd_state *s)
 {
@@ -534,6 +580,13 @@ handle_connection(httpd_state *s)
   }
 }
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @brief Parse a CoAP Request into HTTP
+ * @param coap_request : CoAP request struct to be used
+ * @param s : httpd_state struct to be used
+ * @return nothing
+ */
 static void
 parse_coap(coap_client_request_t *coap_request, httpd_state *s){
 
@@ -550,6 +603,11 @@ parse_coap(coap_client_request_t *coap_request, httpd_state *s){
     REST.set_response_status(s, coap_request->resp_status);
 }
 
+/**
+ * @brief Clean a http state struct
+ * @param s : httpd_state struct to be used
+ * @return nothing
+ */
 static void reset_http_state_obj(httpd_state *s) {
     s->blen = 0;
     s->tmp_buf_len = 0;
@@ -561,6 +619,12 @@ static void reset_http_state_obj(httpd_state *s) {
 }
 
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @brief Prepare the response based on a CoAP request
+ * @param state : CoAP request struct to be used
+ * @return nothing
+ */
 static size_t
 prepare_response(void *state){
     coap_client_request_t *coap_request = (coap_client_request_t *)state;
@@ -602,6 +666,12 @@ prepare_response(void *state){
 	return 0;
 }
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @brief Initiate or clean connection
+ * @param state : httpd_state struct to be used
+ * @return nothing
+ */
 static void
 appcall(void *state)
 {
@@ -647,6 +717,11 @@ appcall(void *state)
     }
 }
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @brief Initiate the server
+ * @return nothing
+ */
 static void
 init(void)
 {
@@ -654,6 +729,14 @@ init(void)
   memb_init(&conns);
 }
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @brief Main Thread of HTTPD Server
+ * @param httpd_process : This process
+ * @param ev : The event passed to this process
+ * @param data : Data regarding to the event that fired
+ * @return nothing
+ */
 PROCESS_THREAD(httpd_process, ev, data)
 {
   PROCESS_BEGIN();
@@ -690,6 +773,10 @@ PROCESS_THREAD(httpd_process, ev, data)
   PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/
+/**
+ * @}
+ */
+
 /**
  * @}
  */

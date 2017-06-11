@@ -1,8 +1,18 @@
-/*
- * er-http.c
+/**
+ * @file     er-http.c
+ * @brief    Rest HTTP Implementation
+ * @version  1.0
+ * @date     01 Jun. 2017
+ * @author   Tiago Costa & Ricardo Jesus & Claudio Prates
  *
- *  Created on: Mar 23, 2017
- *      Author: user
+ **/
+
+/** @defgroup HTTP HTTP
+ * @{
+ */
+
+/** @addtogroup Rest_Implementation
+ * @{
  */
 
 #include <stdlib.h>
@@ -14,8 +24,6 @@
 #include "er-http.h"
 #include "er-coap.h"   // TODO: Esta aqui só para as constantes e enums no rest interface
 
-
-
 #define DEBUG 0
 #if DEBUG
 #include <stdio.h>
@@ -25,7 +33,6 @@
 #define PRINT6ADDR(addr)
 #define PRINTLLADDR(addr)
 #endif
-
 
 /*---------------------------------------------------------------------------*/
 /* Used to temporarily stores content-length as ASCII.
@@ -483,3 +490,10 @@ struct rest_implementation http_rest_implementation = {
   }
 };
 /*---------------------------------------------------------------------------*/
+/**
+ * @}
+ */
+
+/**
+ * @}
+ */

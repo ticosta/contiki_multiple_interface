@@ -36,6 +36,15 @@
  *
  */
 /*---------------------------------------------------------------------------*/
+
+/** @defgroup HTTP HTTP
+ * @{
+ */
+
+/** @addtogroup Server
+ * @{
+ */
+
 #ifndef HTTPD_SIMPLE_H_
 #define HTTPD_SIMPLE_H_
 
@@ -135,7 +144,7 @@ typedef enum {
   BAD_REQUEST_400 =                      400,        /* Bad Request */
   FORBIDDEN_403 =                        403,        /* Forbidden */
   NOT_FOUND_404 =                        404,        /* Not Found */
-  METHOD_NOT_ALLOWED_405 =               405,        /* MEthod Not Allowed */
+  METHOD_NOT_ALLOWED_405 =               405,        /* Method Not Allowed */
   LENGTH_REQUIRED_411 =                  411,        /* Length Required */
   REQUEST_ENTITY_TL_413 =                413,        /* Request Entity Too Large */
 
@@ -150,5 +159,13 @@ typedef enum {
 
 // Event sent by CoAP client with node's response
 extern process_event_t coap_client_event_new_response;
+
+/**
+ * @}
+ */
+
+/**
+ * @}
+ */
 
 #endif /* HTTPD_SIMPLE_H_ */

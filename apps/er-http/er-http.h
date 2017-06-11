@@ -1,6 +1,18 @@
-/*
- * er-http.h
+/**
+ * @file     coap_client.h
+ * @brief    Rest HTTP Implementation
+ * @version  1.0
+ * @date     20 May. 2017
+ * @author   Tiago Costa & Ricardo Jesus & Claudio Prates
  *
+ **/
+
+/** @defgroup HTTP HTTP
+ * @{
+ */
+
+/** @addtogroup Rest_Implementation
+ * @{
  */
 
 #ifndef ER_HTTP_H_
@@ -158,5 +170,13 @@ extern process_event_t httpd_simple_event_new_config;
 /*---------------------------------------------------------------------------*/
 PROCESS_NAME(httpd_process);
 /*---------------------------------------------------------------------------*/
+
+/**
+ * @}
+ */
+
+/**
+ * @}
+ */
 
 #endif /* ER_HTTP_H_ */
