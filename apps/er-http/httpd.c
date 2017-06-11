@@ -30,6 +30,15 @@
  */
 /*---------------------------------------------------------------------------*/
 
+/**
+ * @file     httpd.c
+ * @brief    Contains the logic of handling the connections a processing the http
+ * @version  1.0
+ * @date     01 Jun. 2017
+ * @author   Tiago Costa & Ricardo Jesus & Claudio Prates
+ *
+ **/
+
 /** @defgroup HTTP HTTP
  * @{
  */
@@ -68,69 +77,47 @@
 #define PRINTLLADDR(addr)
 #endif
 
-#define HTTPD_SIMPLE_POST_HANDLER_OK      1
-#define HTTPD_SIMPLE_POST_HANDLER_UNKNOWN 0
-#define HTTPD_SIMPLE_POST_HANDLER_ERROR   0xFFFFFFFF
+#define SEND_STRING(s, str) PSOCK_SEND(s, (uint8_t *)str, strlen(str)) /*!< Sends a String through the socket */
 
+PROCESS(httpd_process, "Web Server"); /*!< Process of HTTP Server */
 /*---------------------------------------------------------------------------*/
-#define SEND_STRING(s, str) PSOCK_SEND(s, (uint8_t *)str, strlen(str))
-/*---------------------------------------------------------------------------*/
-/* POST request machine states */
-#define PARSE_POST_STATE_INIT            0
-#define PARSE_POST_STATE_MORE            1
-#define PARSE_POST_STATE_READING_KEY     2
-#define PARSE_POST_STATE_READING_VAL     3
-#define PARSE_POST_STATE_ERROR           0xFFFFFFFF
-/*---------------------------------------------------------------------------*/
-/*
- * We can only handle a single POST request at a time. Since a second POST
- * request cannot interrupt us while obtaining a lock, we don't really need
- * this lock to be atomic.
- *
- * An HTTP connection will first request a lock before it starts processing
- * a POST request. We maintain a global lock which is either NULL or points
- * to the http conn which currently has the lock
- */
-/*---------------------------------------------------------------------------*/
-PROCESS(httpd_process, "Web Server"); /*!< Creates the Processhttpd_process with name Web Server */
-/*---------------------------------------------------------------------------*/
-static const char http_get[] = "GET ";  /*!< String for method GET */
-static const char http_post[] = "POST "; /*!< String for method POST */
-static const char http_put[] = "PUT "; /*!< String for method PUT */
-static const char http_delete[] = "DELETE "; /*!< String for method DELETE */
+static const char http_get[] = "GET "; /*!< String of the HTTP Method GET */
+static const char http_post[] = "POST "; /*!< String of the HTTP Method POST */
+static const char http_put[] = "PUT "; /*!< String of the HTTP Method PUT */
+static const char http_delete[] = "DELETE "; /*!< String of the HTTP Method DELETE */
 /*---------------------------------------------------------------------------*/
 static const char *NOT_FOUND = "<html><body bgcolor=\"white\">"
                                "<center>"
                                "<h1>404 - File Not Found</h1>"
                                "</center>"
                                "</body>"
-                               "</html>"; /*!< String with template for NOT FOUND */
-/*---------------------------------------------------------------------------*/
+                               "</html>"; /*!< NOT FOUND Template */
+
 const char *default_content_type = http_content_type_txt_html; /*!< Default Content-Type */
-/*---------------------------------------------------------------------------*/
-process_event_t coap_client_event_new_response; /*!< Event for new response */
-/*---------------------------------------------------------------------------*/
+
+process_event_t coap_client_event_new_response; /*!< Event New Response */
 
 static const char *http_header_srv_str[] = {
   "Server: Contiki, ",
   BOARD_STRING "\r\n",
   NULL
-}; /*!< Contains the head information of server */
+}; /*!< HTTP Server Header String */
 
 static const char *http_header_con_close[] = {
   CONN_CLOSE,
   NULL
-}; /*!< Contains the head information for closing connection*/
+}; /*!< Con Close Template */
 
-MEMB(conns, httpd_state, CONNS);
-/*---------------------------------------------------------------------------*/
+MEMB(conns, httpd_state, CONNS); /*!< Allocation of http_state to the variable conns */
 
-
-static service_callback_t service_cbk = NULL;
+static service_callback_t service_cbk = NULL; /*!< Rest Engine Callback */
 
 /**
- * @brief Sets the callback to be called
- * @param callback : Callback to be called
+ * @brief Rest Implementation of setting the callback
+ *
+ * Example query 'p1=param1;p2=param2' converts to 'p1=param1&p2=param2'
+ *
+ * @param callback : A callback to be called once a resource is found
  * @return nothing
  */
 void http_set_service_callback(service_callback_t callback) {
@@ -138,10 +125,13 @@ void http_set_service_callback(service_callback_t callback) {
 }
 
 /**
- * @brief Protothread for enqueue chunks to be transfered
- * @param s : httpd_state struct to be used
- * @param immediate :  Bit for immediate transfer
- * @param format : Format string
+ * @brief ProtoThread: Handling a enqueue_chunk function
+ *
+ * Sends data in chunks
+ *
+ * @param httpd_state : query to convert
+ * @param uint8_t : size of the entire query
+ * @param const char : size of the entire query
  * @return nothing
  */
 static
@@ -183,12 +173,11 @@ PT_THREAD(enqueue_chunk(httpd_state *s, uint8_t immediate,
   PSOCK_END(&s->sout);
 }
 
-/*---------------------------------------------------------------------------*/
-
 /**
- * @brief Protothread to send string
- * @param s : httpd_state struct to be used
- * @param str : String to be sent
+ * @brief Send a string through the SOCKET
+ *
+ * @param s : HTTP State
+ * @param str : String to Send
  * @return nothing
  */
 static
@@ -202,12 +191,13 @@ PT_THREAD(send_string(httpd_state *s, const char *str))
 }
 
 /**
- * @brief Protothread to send headers
- * @param s : httpd_state struct to be used
- * @param statushdr : Status of header
- * @param content_type : Content-type to be used
- * @param redir : Location for redirect | Optional
- * @param additional : Additional payload to be sent | Optional
+ * @brief Send Headers through the SOCKET
+ *
+ * @param s : HTTP State
+ * @param statushdr : Header Status Code (404, 200, etc)
+ * @param content_type : Content-Type to send in the Header
+ * @param redir : New URL to Redirect (Normally associated with POST "Location: {URL}")
+ * @param additional : Aditional Headers 
  * @return nothing
  */
 static
@@ -241,11 +231,11 @@ PT_THREAD(send_headers(httpd_state *s, const char *statushdr,
 
   PT_END(&s->generate_pt);
 }
-/*---------------------------------------------------------------------------*/
 
 /**
- * @brief Protothread to handle output
- * @param s : httpd_state struct to be used
+ * @brief Handles the Output response
+ *
+ * @param s : HTTP State
  * @return nothing
  */
 static
@@ -363,13 +353,15 @@ PT_THREAD(handle_output(httpd_state *s))
   PT_END(&s->outputpt);
 }
 
-/*---------------------------------------------------------------------------*/
 
-static char * ptr_toWrite; /*!< Pointer to write in the buffer */
+static char * ptr_toWrite;
 
 /**
- * @brief Protothread to handle input
- * @param s : httpd_state struct to be used
+ * @brief Handles the Input Request
+ *
+ * Reads Data from the socket and interprets the result
+ *
+ * @param s : HTTP State
  * @return nothing
  */
 static
@@ -523,11 +515,14 @@ PT_THREAD(handle_input(httpd_state *s))
 
   PSOCK_END(&s->sin);
 }
-/*---------------------------------------------------------------------------*/
 
 /**
- * @brief Handle a connection
- * @param s : httpd_state struct to be used
+ * @brief Handles the incoming connections
+ *
+ * Receives connections and pass it to Handle Input for processing
+ * Call's a service callback (rest implementation) after handling the input
+ *
+ * @param s : HTTP State
  * @return nothing
  */
 static void
@@ -579,18 +574,21 @@ handle_connection(httpd_state *s)
 	}
   }
 }
-/*---------------------------------------------------------------------------*/
 
 /**
- * @brief Parse a CoAP Request into HTTP
- * @param coap_request : CoAP request struct to be used
- * @param s : httpd_state struct to be used
+ * @brief Converts the HTTP to CoAP
+ *
+ * Copies the payload, maps the status code and the content-type
+ *
+ * @param coap_request : query to convert
+ * @param s : The HTTP State
  * @return nothing
  */
 static void
 parse_coap(coap_client_request_t *coap_request, httpd_state *s){
 
 	// TODO: Discutir como funciona o payload no POST. A resposta a um POST nunca trás payload? Se verdade, então isto só deve ser feito quando não é um POST...
+	// POST suporta payload na resposta, apesar de enviar um 302, pode enviar payload, para que o redirect seja mais rapido exemplo ("sends the html of the page of 302 and the redirect url, so it caches")
 	// Se for verdade, no output_handler tem de se enviar o payload.
 	memcpy(s->response.buf, coap_request->buffer, coap_request->blen);
 	s->response.blen = coap_request->blen;
@@ -604,8 +602,9 @@ parse_coap(coap_client_request_t *coap_request, httpd_state *s){
 }
 
 /**
- * @brief Clean a http state struct
- * @param s : httpd_state struct to be used
+ * @brief Resets a HTTP State Object
+ *
+ * @param s : The HTTP State
  * @return nothing
  */
 static void reset_http_state_obj(httpd_state *s) {
@@ -618,11 +617,11 @@ static void reset_http_state_obj(httpd_state *s) {
     memset(s->buffer, 0, sizeof(s->buffer));
 }
 
-/*---------------------------------------------------------------------------*/
-
 /**
- * @brief Prepare the response based on a CoAP request
- * @param state : CoAP request struct to be used
+ * @brief Prapares a new CoAP Request
+ *
+ *
+ * @param state : The CoAP Request
  * @return nothing
  */
 static size_t
@@ -665,11 +664,14 @@ prepare_response(void *state){
 
 	return 0;
 }
-/*---------------------------------------------------------------------------*/
 
 /**
- * @brief Initiate or clean connection
- * @param state : httpd_state struct to be used
+ * @brief Main Function
+ *
+ * Polling through the uip to check incoming connection, and if there is
+ * starts the process of handling
+ *
+ * @param state : The HTTP State
  * @return nothing
  */
 static void
@@ -716,10 +718,12 @@ appcall(void *state)
         uip_abort();
     }
 }
-/*---------------------------------------------------------------------------*/
 
 /**
- * @brief Initiate the server
+ * @brief Init Function
+ *
+ * Starts to listen on port 80 and inits a variable conns
+ *
  * @return nothing
  */
 static void
@@ -728,13 +732,15 @@ init(void)
   tcp_listen(UIP_HTONS(80));
   memb_init(&conns);
 }
-/*---------------------------------------------------------------------------*/
 
 /**
- * @brief Main Thread of HTTPD Server
- * @param httpd_process : This process
- * @param ev : The event passed to this process
- * @param data : Data regarding to the event that fired
+ * @brief Process of http_process
+ *
+ * Handles the events and redirects to the appropriate location
+ *
+ * @param httpd_process : The process
+ * @param ev : The event that were fired
+ * @param data : The data associated with the event
  * @return nothing
  */
 PROCESS_THREAD(httpd_process, ev, data)
@@ -772,7 +778,7 @@ PROCESS_THREAD(httpd_process, ev, data)
 
   PROCESS_END();
 }
-/*---------------------------------------------------------------------------*/
+
 /**
  * @}
  */

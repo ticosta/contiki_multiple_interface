@@ -28,14 +28,15 @@
  * SUCH DAMAGE.
  *
  */
-/*---------------------------------------------------------------------------*/
+
 /**
- * \file
- *         Header file for the HTTPD of the HTTP Server.
- * \author
+ * @file     httpd.h
+ * @brief    Contains the Definitions of the HTTP Server
+ * @version  1.0
+ * @date     20 May. 2017
+ * @author   Tiago Costa & Ricardo Jesus & Claudio Prates
  *
- */
-/*---------------------------------------------------------------------------*/
+ **/
 
 /** @defgroup HTTP HTTP
  * @{
@@ -144,7 +145,7 @@ typedef enum {
   BAD_REQUEST_400 =                      400,        /* Bad Request */
   FORBIDDEN_403 =                        403,        /* Forbidden */
   NOT_FOUND_404 =                        404,        /* Not Found */
-  METHOD_NOT_ALLOWED_405 =               405,        /* Method Not Allowed */
+  METHOD_NOT_ALLOWED_405 =               405,        /* MEthod Not Allowed */
   LENGTH_REQUIRED_411 =                  411,        /* Length Required */
   REQUEST_ENTITY_TL_413 =                413,        /* Request Entity Too Large */
 

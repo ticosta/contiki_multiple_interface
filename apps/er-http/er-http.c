@@ -1,6 +1,6 @@
 /**
  * @file     er-http.c
- * @brief    Rest HTTP Implementation
+ * @brief    Contains the Rest Implementation of the HTTP
  * @version  1.0
  * @date     01 Jun. 2017
  * @author   Tiago Costa & Ricardo Jesus & Claudio Prates
@@ -37,19 +37,29 @@
 /*---------------------------------------------------------------------------*/
 /* Used to temporarily stores content-length as ASCII.
  * Assumes that this value never exceeds 9999 Bytes PLUS null terminator. */
-#define CONTENT_LENGTH_BUFF_SIZE                   5
-static char content_len_buf[CONTENT_LENGTH_BUFF_SIZE];
+#define CONTENT_LENGTH_BUFF_SIZE                   5 /*!< Defines the MAX of Content-length in bytes */
+static char content_len_buf[CONTENT_LENGTH_BUFF_SIZE]; /*!< Used to temporarily stores content-length as ASCII, Assumes that this value never exceeds 9999 Bytes PLUS null terminator. */
 /*---------------------------------------------------------------------------*/
 static int
 http_get_variable(const char *buffer, size_t length, const char *name,
                   const char **output);
 
-/** Initialize the REST implementation. */
+/**
+ * @brief Initialize the REST implementation.
+ *
+ * @return nothing
+ */
 void http_init_engine(void) {
 	process_start(&httpd_process, NULL);
 }
 
-
+/**
+ * @brief Rest Implementation of Set Aditional Headers.
+ *
+ * @param request : The HTTP request state
+ * @param headers : An array of headers
+ * @return nothing
+ */
 int http_set_additional_headers(void *request, const void **headers) {
 	httpd_state *const http_pkt = (httpd_state *)request;
 
@@ -60,14 +70,31 @@ int http_set_additional_headers(void *request, const void **headers) {
 // 18 -> Content-Length:%s\r\n
 #define CLEN_HDR_BUF_SIZE             18 + CONTENT_LENGTH_BUFF_SIZE
 static char clength_hdr_buff[CLEN_HDR_BUF_SIZE];
+
+/**
+ * @brief Constructs the header string of Content-Length
+ *
+ * @param request : The HTTP request state
+ * @param len : The len to insert in the content-length
+ * @return void pointer
+ */
 void * build_header_content_length(void *request, int len) {
 	itoa(len, content_len_buf, 10);
 	snprintf(clength_hdr_buff, CLEN_HDR_BUF_SIZE, http_header_content_legth, content_len_buf);
 
 	return clength_hdr_buff;
 }
-/* -------------------------- Error status function ----------------------- */
+
 const char **add_hdrs[] = {NULL, NULL};
+
+/**
+ * @brief Error status function
+ *
+ * @param request : The HTTP request state
+ * @param err : An array of chars with the error
+ * @param status : The int version of the error
+ * @return nothing
+ */
 void set_http_error(void *request, char *err, unsigned int status) {
 	((httpd_state *)request)->response.immediate_response = 1;
 	//
@@ -81,9 +108,13 @@ void set_http_error(void *request, char *err, unsigned int status) {
 }
 /*---------------------------------------------------------------------------*/
 
-
-
-
+/**
+ * @brief Set's the redirection path on the http packet
+ *
+ * @param request : The HTTP request state
+ * @param path : An array of chars containing the path
+ * @return int
+ */
 int http_set_redir_path(void *request, const void *path) {
 	httpd_state *const http_pkt = (httpd_state *)request;
 
@@ -92,7 +123,13 @@ int http_set_redir_path(void *request, const void *path) {
 }
 
 
-/** Get request URI path. */
+/**
+ * @brief Get request URI path.
+ *
+ * @param request : The HTTP request state
+ * @param path : Pointer of array of chars that will store the path
+ * @return int
+ */
 int http_get_header_uri_path(void *request, const char **path) {
 	httpd_state *const http_pkt = (httpd_state *)request;
 	*path = http_pkt->uri;
@@ -100,7 +137,12 @@ int http_get_header_uri_path(void *request, const char **path) {
 	return http_pkt->uri_len;
 }
 
-/** Get the method of a request. */
+/**
+ * @brief Get the method of a request.
+ *
+ * @param request : The HTTP request state
+ * @return rest_resource_flags_t
+ */
 rest_resource_flags_t http_get_rest_method(void *request) {
 	httpd_state *const http_pkt = (httpd_state *)request;
 
@@ -109,11 +151,18 @@ rest_resource_flags_t http_get_rest_method(void *request) {
 	                                 (http_pkt->request_type - 1));
 }
 
-/** Set the status code of a response.
+/**
+ * @brief Set the status code of a response.
+ *
  * It maps HTTP and CoAP codes to an HTTP status.
  * The mapping for CoAP only map status codes with just one map code to HTTP.
  *
- * Based on https://tools.ietf.org/html/draft-ietf-core-http-mapping-17#section-7 */
+ * Based on https://tools.ietf.org/html/draft-ietf-core-http-mapping-17#section-7
+ *
+ * @param response : The HTTP response state
+ * @param code : The HTTP Status Code
+ * @return int
+ */
 int http_set_status_code(void *response, unsigned int code) {
     httpd_state *const http_pkt = (httpd_state *)response;
     const char * hdr_ptr;
@@ -180,7 +229,13 @@ int http_set_status_code(void *response, unsigned int code) {
 	return 1;
 }
 
-/** Get the content-type of a request. */
+/**
+ * @brief Get the content-type of a request.
+ *
+ * @param request : The HTTP request state
+ * @param content_format : The Content-Type
+ * @return int
+ */
 int http_get_header_content_type(void *request,
 							 unsigned int *content_format) {
 	httpd_state *const http_pkt = (httpd_state *)request;
@@ -191,7 +246,13 @@ int http_get_header_content_type(void *request,
 	return 1;
 }
 
-/** Set the Content-Type of a response. */
+/**
+ * @brief Set the Content-Type of a response.
+ *
+ * @param request : The HTTP request state
+ * @param content_type : The Content-Type
+ * @return int
+ */
 int http_set_header_content_type(void *request,
 							 unsigned int content_type) {
 	httpd_state *const http_pkt = (httpd_state *)request;
@@ -327,7 +388,14 @@ int http_get_payload(void *request, const uint8_t **payload) {
 	return 0;
 }
 
-/** Set the payload option of a response. */
+/**
+ * @brief Set the payload option of a response.
+ *
+ * @param request : The HTTP request state
+ * @param payload : The Payload data to be stored
+ * @param length : The size of the payload data
+ * @return int
+ */
 int http_set_payload(void *request, const void *payload,
 						  size_t length) {
 	httpd_state *const http_pkt = (httpd_state *)request;
@@ -343,7 +411,14 @@ int http_get_header_uri_query(void *request, const char **value) {
 	return 0;
 }
 
-/** Get the value of a request query key-value pair. */
+/**
+ * @brief Get the value of a request query key-value pair.
+ *
+ * @param request : The HTTP request state
+ * @param name : The Key of the pair
+ * @param value : The Value of the pair
+ * @return int
+ */
 int http_get_query_variable(void *request, const char *name,
 						const char **value) {
 	http_packet_t *req = (http_packet_t *)request;
@@ -369,6 +444,15 @@ http_observe_handler(resource_t *resource, void *request, void *response) {
 
 }
 
+/**
+ * @brief Get the variable name of the query string
+ *
+ * @param buffer : The buffer to look up for the string
+ * @param length : The length of the buffer
+ * @param name : The name to search
+ * @param output : The buffer to store the result
+ * @return int
+ */
 static int
 http_get_variable(const char *buffer, size_t length, const char *name,
                   const char **output)
