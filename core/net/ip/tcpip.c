@@ -522,6 +522,10 @@ eventhandler(process_event_t ev, process_data_t data)
 #endif /* !UIP_CONF_ROUTER */
 
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+#if UIP_CONF_ROUTER
+	int i;
+	int if_tmp = if_ds6_selector;
+#endif /* !UIP_CONF_ROUTER */
 	for(i = 0; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++) {
 		// select the right interface
 		uip_ds6_select_netif(i);
