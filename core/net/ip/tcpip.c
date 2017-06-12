@@ -512,7 +512,9 @@ eventhandler(process_event_t ev, process_data_t data)
 	        etimer_expired((struct etimer *)&uip_ds6_timer_rs)) {
 	      uip_ds6_send_rs();
 	      tcpip_ipv6_output();
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
 	      continue;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 	    }
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
 	}
@@ -528,7 +530,9 @@ eventhandler(process_event_t ev, process_data_t data)
 			etimer_expired(&uip_ds6_timer_periodic)) {
 		  uip_ds6_periodic();
 		  tcpip_ipv6_output();
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
 		  continue;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 		}
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
     }
