@@ -170,6 +170,7 @@ int http_set_status_code(void *response, unsigned int code) {
     switch(code) {
 	/* ------  2xx  ------ */
     case OK_200:
+    case CHANGED_2_04:
     case CONTENT_2_05:
     	hdr_ptr = http_header_200;
     	break;
