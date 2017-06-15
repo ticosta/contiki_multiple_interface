@@ -539,13 +539,30 @@ uip_ds6_addr_lookup(uip_ipaddr_t *ipaddr)
 uip_ds6_addr_t *
 uip_ds6_get_link_local(int8_t state)
 {
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+  uint8_t i;
+  uint8_t current_if = if_ds6_selector;
+  for(i = 0, if_ds6_selector = i; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++, if_ds6_selector = i) {
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
   for(locaddr = uip_ds6_if.addr_list;
       locaddr < uip_ds6_if.addr_list + UIP_DS6_ADDR_NB; locaddr++) {
     if(locaddr->isused && (state == -1 || locaddr->state == state)
        && (uip_is_addr_linklocal(&locaddr->ipaddr))) {
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+	  if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
       return locaddr;
     }
   }
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+  }
+
+  if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
   return NULL;
 }
 
