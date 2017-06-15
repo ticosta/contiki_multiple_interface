@@ -322,8 +322,15 @@ PT_THREAD(handle_output(httpd_state *s))
 			  );
       PT_WAIT_THREAD(&s->outputpt, send_string(s, "Bad Request\n"));
     }
-  } else if(s->request_type == REQUEST_TYPE_GET) {
-	  PRINTF("***** METHOD GET *******\n");
+  } else if( (s->request_type == REQUEST_TYPE_GET) ||
+		  (s->request_type == REQUEST_TYPE_PUT)) {
+#ifdef DEBUG
+	  if(s->request_type == REQUEST_TYPE_GET) {
+		  PRINTF("***** METHOD GET *******\n");
+	  } else {
+		  PRINTF("***** METHOD PUT *******\n");
+	  }
+#endif
 	  PRINTF("Content-Type: %s\n", s->response.content_type);
 	  PRINTF("Status Str: %s\n", s->response.status);
 
@@ -373,11 +380,18 @@ PT_THREAD(handle_input(httpd_state *s))
 
   PSOCK_READTO(&s->sin, ISO_space);
 
-  /* ---------------------------- Handle GET ---------------------------- */
-  if(strncasecmp(s->inputbuf, http_get, 4) == 0) {
+  /* ---------------------------- Handle GET and PUT ---------------------------- */
+  if( (strncasecmp(s->inputbuf, http_get, 4) == 0) ||
+		  (strncasecmp(s->inputbuf, http_put, 4) == 0)) {
 
-	PRINTF("***** handle_input: GET *******\n");
-	s->request_type = REQUEST_TYPE_GET;
+	if(strncasecmp(s->inputbuf, http_get, 4) == 0) {
+	  PRINTF("***** handle_input: GET *******\n");
+	  s->request_type = REQUEST_TYPE_GET;
+	} else {
+	  PRINTF("***** handle_input: PUT *******\n");
+	  s->request_type = REQUEST_TYPE_PUT;
+	}
+
 	PSOCK_READTO(&s->sin, ISO_space);
 	// copy uri
 	s->complete_uri_len = PSOCK_DATALEN(&s->sin) - 1; // we remove the space at the end
@@ -499,11 +513,7 @@ PT_THREAD(handle_input(httpd_state *s))
     s->content_length = s->response.content_length;
     s->response.content_length = 0;
   /* ---------------------------- Handle PUT ---------------------------- */
-  } else if(strncasecmp(s->inputbuf, http_put, 4) == 0){
-
-	  PRINTF("***** handle_input: PUT - UNIMPLEMENTED YET! *******\n\n");
-
-  }else {
+  } else {
     PSOCK_CLOSE_EXIT(&s->sin);
   }
 
