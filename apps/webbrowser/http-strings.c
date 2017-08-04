@@ -16,6 +16,12 @@ const char http_302[5] =
 const char http_get[5] = 
 /* "GET " */
 {0x47, 0x45, 0x54, 0x20, };
+/************************/
+/// Changed from original
+const char http_post[6] =
+/* "POST " */
+{0x50, 0x4f, 0x53, 0x54, 0x20, };
+/************************/
 const char http_10[9] = 
 /* "HTTP/1.0" */
 {0x48, 0x54, 0x54, 0x50, 0x2f, 0x31, 0x2e, 0x30, };

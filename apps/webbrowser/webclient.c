@@ -39,6 +39,12 @@
 
 #include "webclient.h"
 
+/************************/
+/// Changed from original
+//#include <stdio.h> // for sprintf
+#include <stdlib.h> // for itoa
+/************************/
+
 #define WEBCLIENT_TIMEOUT 100
 
 #define WEBCLIENT_STATE_STATUSLINE 0
@@ -71,6 +77,13 @@ struct webclient_state {
   uint16_t httpheaderlineptr;
 
   char mimetype[32];
+
+  /************************/
+  /// Changed from original
+  char method[10];
+  char bufferToSend[512];
+  uint8_t sizeOfBuffer;
+  /************************/
 };
 
 static struct webclient_state s;
@@ -111,13 +124,32 @@ init_connection(void)
 {
   s.state = WEBCLIENT_STATE_STATUSLINE;
 
-  s.getrequestleft = sizeof(http_get) - 1 + 1 +
+  s.getrequestleft = /*sizeof(http_get) - 1 +*/ 1 +
     sizeof(http_10) - 1 +
     sizeof(http_crnl) - 1 +
     sizeof(http_host) - 1 +
     sizeof(http_crnl) - 1 +
     (uint16_t)strlen(http_user_agent_fields) +
     (uint16_t)strlen(s.file) + (uint16_t)strlen(s.host);
+
+  /************************/
+  /// Changed from original
+  //removed get from above
+  if(strcmp(s.method, http_get) == 0){
+        s.getrequestleft += sizeof(http_get) - 1;
+  }
+  if (strcmp(s.method, http_post) == 0) {
+      s.getrequestleft += sizeof(http_post) - 1;
+
+      char conv[4];
+      //sprintf(conv,"%d",s.sizeOfBuffer);
+      itoa(s.sizeOfBuffer, conv, 10);
+      s.getrequestleft += strlen("Content-Length: ") + strlen(conv) + sizeof(http_crnl) - 1;
+
+      s.getrequestleft += strlen("Content-Type: text/plain") + sizeof(http_crnl) - 1
+                 + s.sizeOfBuffer;
+ }
+  /************************/
   s.getrequestptr = 0;
 
   s.httpheaderlineptr = 0;
@@ -154,6 +186,14 @@ webclient_get(const char *host, uint16_t port, const char *file)
     return 0;
   }
   
+  /************************/
+  /// Changed from original
+  s.bufferToSend[0] = '\0';
+
+  strncpy(s.method, http_get, sizeof(http_get));
+  s.method[sizeof(http_get)] = '\0';
+  /************************/
+
   s.port = port;
   strncpy(s.file, file, sizeof(s.file));
   strncpy(s.host, host, sizeof(s.host));
@@ -161,6 +201,56 @@ webclient_get(const char *host, uint16_t port, const char *file)
   init_connection();
   return 1;
 }
+
+/************************/
+/// Changed from original
+unsigned char
+webclient_post(char *host, uint16_t port, char *file, char* dataToSend){
+    struct uip_conn *conn;
+    uip_ipaddr_t * ipaddr;
+    static uip_ipaddr_t addr;
+
+    /* First check if the host is an IP address. */
+    ipaddr = &addr;
+    if(uiplib_ipaddrconv(host, &addr) == 0) {
+  #if UIP_UDP
+      if(resolv_lookup(host,&ipaddr) != RESOLV_STATUS_CACHED) {
+        return 0;
+      }
+  #else /* UIP_UDP */
+      return 0;
+  #endif /* UIP_UDP */
+    }
+
+    conn = tcp_connect(ipaddr, uip_htons(port), NULL);
+
+    if (conn == NULL) {
+        return 0;
+    }
+
+    s.bufferToSend[0] = '\0';
+
+    strncpy(s.method, http_post, sizeof(http_post));
+    s.method[sizeof(http_post)] = '\0';
+
+    int len = strlen(dataToSend);
+
+    /* Buffer too small can't send */
+    if( len > sizeof(s.bufferToSend) )
+      return 0;
+
+    s.sizeOfBuffer = strlen(dataToSend);
+    strncpy( s.bufferToSend, dataToSend, s.sizeOfBuffer);
+
+    s.port = port;
+    strncpy(s.file, file, strlen(file));
+    strncpy(s.host, host, strlen(host));
+
+    init_connection();
+    return 1;
+}
+/************************/
+
 /*-----------------------------------------------------------------------------------*/
 /* Copy data into a "window", specified by the windowstart and
    windowend variables. Only data that fits within the window is
@@ -218,8 +308,12 @@ senddata(void)
     curptr = 0;
     windowend = windowstart + uip_mss();
     windowptr = (unsigned char *)uip_appdata - windowstart;
+    /************************/
+    /// Changed from original
+    //curptr = window_copy(curptr, http_get, sizeof(http_get) - 1);
+    curptr = window_copy(curptr, s.method, strlen(s.method));
+    /************************/
 
-    curptr = window_copy(curptr, http_get, sizeof(http_get) - 1);
     curptr = window_copy(curptr, s.file, (unsigned char)strlen(s.file));
     curptr = window_copy(curptr, " ", 1);
     curptr = window_copy(curptr, http_10, sizeof(http_10) - 1);
@@ -230,9 +324,37 @@ senddata(void)
     curptr = window_copy(curptr, s.host, (unsigned char)strlen(s.host));
     curptr = window_copy(curptr, http_crnl, sizeof(http_crnl) - 1);
 
+    /************************/
+    /// Changed from original
+    if (strcmp(s.method, http_post) == 0) {
+        char conv[4];
+        //sprintf(conv,"%d",strlen(s.bufferToSend));
+        itoa(strlen(s.bufferToSend), conv, 10);
+        curptr = window_copy(curptr, "Content-Length: ",
+                strlen("Content-Length: "));
+
+        curptr = window_copy(curptr, conv, strlen(conv));
+
+        curptr = window_copy(curptr, http_crnl, sizeof(http_crnl) - 1);
+
+        curptr = window_copy(curptr, "Content-Type: ",
+                strlen("Content-Type: "));
+        curptr = window_copy(curptr, "text/plain", strlen("text/plain"));
+        curptr = window_copy(curptr, http_crnl, sizeof(http_crnl) - 1);
+    }
+
+    /************************/
+
     curptr = window_copy(curptr, http_user_agent_fields,
 		       (unsigned char)strlen(http_user_agent_fields));
     
+    /************************/
+    /// Changed from original
+    if (strcmp(s.method, http_post) == 0) {
+        curptr = window_copy(curptr, s.bufferToSend, s.sizeOfBuffer);
+    }
+    /************************/
+
     len = s.getrequestleft > uip_mss()?
       uip_mss():
       s.getrequestleft;
@@ -408,10 +530,17 @@ newdata(void)
     len = parse_headers(len);
   }
 
-  if(len > 0 && s.state == WEBCLIENT_STATE_DATA &&
-     s.httpflag == HTTPFLAG_OK) {
+  /************************/
+  /// Changed from original
+  /*if(len > 0 && s.state == WEBCLIENT_STATE_DATA &&
+       s.httpflag == HTTPFLAG_OK) {
+      webclient_datahandler((char *)uip_appdata, len);*/
+  if((len > 0 && s.state == WEBCLIENT_STATE_DATA &&
+     s.httpflag == HTTPFLAG_OK) || (s.state == WEBCLIENT_STATE_DATA &&
+     s.httpflag == HTTPFLAG_OK && strcmp(s.method, http_post))) {
     webclient_datahandler((char *)uip_appdata, len);
   }
+  /************************/
 }
 /*-----------------------------------------------------------------------------------*/
 void
