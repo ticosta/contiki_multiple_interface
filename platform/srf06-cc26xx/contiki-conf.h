@@ -246,7 +246,7 @@
 #endif
 
 #define UIP_CONF_UDP                         1
-#define UIP_CONF_UDP_CHECKSUMS               0
+#define UIP_CONF_UDP_CHECKSUMS               1
 #define UIP_CONF_ICMP6                       1
 /*---------------------------------------------------------------------------*/
 #else /* NETSTACK_CONF_WITH_IPV6 */
