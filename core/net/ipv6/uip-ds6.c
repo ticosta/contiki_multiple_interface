@@ -648,21 +648,33 @@ uip_ds6_select_src(uip_ipaddr_t *src, uip_ipaddr_t *dst)
   uint8_t best = 0;             /* number of bit in common with best match */
   uint8_t n = 0;
   uip_ds6_addr_t *matchaddr = NULL;
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+  uint8_t i;
+  uint8_t current_if = if_ds6_selector;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
   if(!uip_is_addr_linklocal(dst) && !uip_is_addr_mcast(dst)) {
-    /* find longest match */
-    for(locaddr = uip_ds6_if.addr_list;
-        locaddr < uip_ds6_if.addr_list + UIP_DS6_ADDR_NB; locaddr++) {
-      /* Only preferred global (not link-local) addresses */
-      if(locaddr->isused && locaddr->state == ADDR_PREFERRED &&
-         !uip_is_addr_linklocal(&locaddr->ipaddr)) {
-        n = get_match_length(dst, &locaddr->ipaddr);
-        if(n >= best) {
-          best = n;
-          matchaddr = locaddr;
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+    for(i = 0, if_ds6_selector = i; i < UIP_CONF_DS6_INTERFACES_NUMBER; i++, if_ds6_selector = i) {
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+      /* find longest match */
+      for(locaddr = uip_ds6_if.addr_list;
+          locaddr < uip_ds6_if.addr_list + UIP_DS6_ADDR_NB; locaddr++) {
+        /* Only preferred global (not link-local) addresses */
+        if(locaddr->isused && locaddr->state == ADDR_PREFERRED &&
+           !uip_is_addr_linklocal(&locaddr->ipaddr)) {
+          n = get_match_length(dst, &locaddr->ipaddr);
+          if(n >= best) {
+            best = n;
+            matchaddr = locaddr;
+          }
         }
       }
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
     }
+    if_ds6_selector = current_if;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+
 #if UIP_IPV6_MULTICAST
   } else if(uip_is_addr_mcast_routable(dst)) {
     matchaddr = uip_ds6_get_global(ADDR_PREFERRED);
