@@ -70,6 +70,14 @@
 
 #include <stdio.h>
 
+#define DEBUG DEBUG_FULL
+#include "net/ip/uip-debug.h"
+#if DEBUG
+#define PRINTF(...) printf(__VA_ARGS__)
+#else
+#define PRINTF(...)
+#endif
+
 /*---------------------------------------------------------------------------*/
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
 #include "core/net/eth/ethernet-defs.h"
@@ -84,6 +92,7 @@
 uip_eth_addr ethernet_if_addr;
 
 // The default Neighbor
+// TODO: Currently we use it hardcoded. In the future it needs to be calculated based on the ethernet's link-local address
 uip_ipaddr_t default_neighbor_ip6_addr = {
 		.u16[0] = 0x80FE,
 		.u16[1] = 0x0021,
@@ -158,90 +167,78 @@ set_rf_params(void)
   NETSTACK_RADIO.set_object(RADIO_PARAM_64BIT_ADDR, ext_addr, 8);
 
   NETSTACK_RADIO.get_value(RADIO_PARAM_CHANNEL, &val);
-  printf(" RF: Channel %d\n", val);
+  PRINTF(" RF: Channel %d\n", val);
 
   int i;
-  printf("* Link layer addr: ");
+  PRINTF("* Link layer addr: ");
   for(i = 0; i < LINKADDR_SIZE - 1; i++) {
-    printf("%02x:", linkaddr_node_addr.u8[i]);
+    PRINTF("%02x:", linkaddr_node_addr.u8[i]);
   }
-  printf("%02x\n", linkaddr_node_addr.u8[i]);
+  PRINTF("%02x\n", linkaddr_node_addr.u8[i]);
 
   /* also set the global node id */
   node_id = short_addr;
-  printf(" Node ID: %d\n", node_id);
+  PRINTF(" Node ID: %d\n", node_id);
 }
 /*---------------------------------------------------------------------------*/
 /**
- * Initialise ethernet interfaces
+ *  \brief Initialises the ethernet interface
  */
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
 static void init_eth_if(void) {
-	uip_ipaddr_t loc_fipaddr;
+  uip_ipaddr_t loc_fipaddr;
 
-	// Select ethernet interface
-	uip_ds6_select_netif(UIP_DEFAULT_INTERFACE_ID);
+  // Select ethernet interface
+  uip_ds6_select_netif(UIP_DEFAULT_INTERFACE_ID);
 
-	memset(uip_ds6_prefix_list, 0, sizeof(uip_ds6_prefix_list));
-	memset(&uip_ds6_if, 0, sizeof(uip_ds6_if));
-	// Set interface parameters
-	uip_ds6_if.link_mtu = UIP_LINK_MTU;
-	uip_ds6_if.cur_hop_limit = UIP_TTL;
-	uip_ds6_if.base_reachable_time = UIP_ND6_REACHABLE_TIME;
-	uip_ds6_if.reachable_time = uip_ds6_compute_reachable_time();
-	uip_ds6_if.retrans_timer = UIP_ND6_RETRANS_TIMER;
-	uip_ds6_if.maxdadns = UIP_ND6_DEF_MAXDADNS;
+  memset(uip_ds6_prefix_list, 0, sizeof(uip_ds6_prefix_list));
+  memset(&uip_ds6_if, 0, sizeof(uip_ds6_if));
+  // Set interface parameters
+  uip_ds6_if.link_mtu = UIP_LINK_MTU;
+  uip_ds6_if.cur_hop_limit = UIP_TTL;
+  uip_ds6_if.base_reachable_time = UIP_ND6_REACHABLE_TIME;
+  uip_ds6_if.reachable_time = uip_ds6_compute_reachable_time();
+  uip_ds6_if.retrans_timer = UIP_ND6_RETRANS_TIMER;
+  uip_ds6_if.maxdadns = UIP_ND6_DEF_MAXDADNS;
 
-	// Create link local address, prefix, multicast addresses, anycast addresses
-	uip_create_linklocal_prefix(&loc_fipaddr);
-	// TODO: Need to make it different from Radio interface. Is this the right way?
-	loc_fipaddr.u8[2] = IP_LINK_LOCAL_PREFIX_BYTE;
+  // Create link local address, prefix, multicast addresses, anycast addresses
+  uip_create_linklocal_prefix(&loc_fipaddr);
+  // TODO: Need to make it different from Radio interface. Is this the right way?
+  loc_fipaddr.u8[2] = IP_LINK_LOCAL_PREFIX_BYTE;
 #if UIP_CONF_ROUTER
-	uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0, 0, 0, 0);
+  uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0, 0, 0, 0);
 #else // UIP_CONF_ROUTER
-	uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0);
+  uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0);
 #endif // UIP_CONF_ROUTER
-	uip_ds6_set_addr_iid(&loc_fipaddr, &uip_lladdr);
-	uip_ds6_addr_add(&loc_fipaddr, 0, ADDR_AUTOCONF);
+  uip_ds6_set_addr_iid(&loc_fipaddr, &uip_lladdr);
+  uip_ds6_addr_add(&loc_fipaddr, 0, ADDR_AUTOCONF);
+  PRINTF("* Ethernet link-local IPv6 address: ");
+  PRINT6ADDR(&loc_fipaddr);
+  PRINTF("\n");
 
-	uip_create_linklocal_allnodes_mcast(&loc_fipaddr);
-	uip_ds6_maddr_add(&loc_fipaddr);
+  uip_create_linklocal_allnodes_mcast(&loc_fipaddr);
+  uip_ds6_maddr_add(&loc_fipaddr);
 #if UIP_CONF_ROUTER
-	uip_create_linklocal_allrouters_mcast(&loc_fipaddr);
-	uip_ds6_maddr_add(&loc_fipaddr);
+  uip_create_linklocal_allrouters_mcast(&loc_fipaddr);
+  uip_ds6_maddr_add(&loc_fipaddr);
 #endif
 
-if(!UIP_CONF_IPV6_RPL) {
-  uip_ipaddr_t ipaddr;
-  int i;
+  // Set site-local address and prefix
+  uip_ip6addr(&loc_fipaddr, UIP_DS6_DEFAULT_PREFIX, 0, 0, 0, 0, 0, 0, 0);
+#if UIP_CONF_ROUTER
+  uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0, 0, 0, 0);
+#else // UIP_CONF_ROUTER
+  uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0);
+#endif // UIP_CONF_ROUTER
+  uip_ip6addr(&loc_fipaddr, UIP_DS6_DEFAULT_PREFIX, 0, 0, 0, 0, 0, 0, IPV6_CONF_ADDR_8);
+  uip_ds6_addr_add(&loc_fipaddr, 0, ADDR_TENTATIVE);
 
-  uip_ip6addr(&ipaddr, UIP_DS6_DEFAULT_PREFIX, 0, 0, 0, 0, 0, 0, IPV6_CONF_ADDR_8);
-  //uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr);
-  uip_ds6_addr_add(&ipaddr, 0, ADDR_TENTATIVE);
-  printf("* Ethernet: Tentative site IPv6 address ");
-  for(i = 0; i < 7; ++i) {
-	  printf("%02x%02x:",
-		   ipaddr.u8[i * 2], ipaddr.u8[i * 2 + 1]);
-  }
-  printf("%02x%02x\n",
-		 ipaddr.u8[7 * 2], ipaddr.u8[7 * 2 + 1]);
-}
+  PRINTF("* Ethernet site-local IPv6 address: ");
+  PRINT6ADDR(&loc_fipaddr);
+  PRINTF("\n");
 
-	// TODO: passar para maiúsculas
-	printf("* Ethernet: Tentative link-local IPv6 address ");
-	{
-	uip_ds6_addr_t *lladdr;
-	int i;
-	lladdr = uip_ds6_get_link_local(-1);
-	for(i = 0; i < 7; ++i) {
-		printf("%02x%02x:", lladdr->ipaddr.u8[i * 2],
-			 lladdr->ipaddr.u8[i * 2 + 1]);
-	}
-	printf("%02x%02x\n", lladdr->ipaddr.u8[14], lladdr->ipaddr.u8[15]);
-	}
-
-	  // Initializes the ethernet interface
-	  ethernet_dev_init();
+  // Initializes the ethernet interface
+  ethernet_dev_init();
 }
 #endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 /*---------------------------------------------------------------------------*/
@@ -298,11 +295,11 @@ main(void)
 
   ///////serial_line_init();
 
-  printf("Starting " CONTIKI_VERSION_STRING "\n");
-  printf("With DriverLib v%u.%u\n", DRIVERLIB_RELEASE_GROUP,
+  PRINTF("Starting " CONTIKI_VERSION_STRING "\n");
+  PRINTF("With DriverLib v%u.%u\n", DRIVERLIB_RELEASE_GROUP,
          DRIVERLIB_RELEASE_BUILD);
-  printf(BOARD_STRING "\n");
-  printf("IEEE 802.15.4: %s, Sub-GHz: %s, BLE: %s, Prop: %s\n",
+  PRINTF(BOARD_STRING "\n");
+  PRINTF("IEEE 802.15.4: %s, Sub-GHz: %s, BLE: %s, Prop: %s\n",
          ti_lib_chipinfo_supports_ieee_802_15_4() == true ? "Yes" : "No",
          ti_lib_chipinfo_chip_family_is_cc13xx() == true ? "Yes" : "No",
          ti_lib_chipinfo_supports_ble() == true ? "Yes" : "No",
@@ -316,18 +313,18 @@ main(void)
 
   fade(LEDS_YELLOW);
 
-  printf(" Net: ");
-  printf("%s\n", NETSTACK_NETWORK.name);
-  printf(" MAC: ");
-  printf("%s\n", NETSTACK_MAC.name);
-  printf(" RDC: ");
-  printf("%s", NETSTACK_RDC.name);
+  PRINTF(" Net: ");
+  PRINTF("%s\n", NETSTACK_NETWORK.name);
+  PRINTF(" MAC: ");
+  PRINTF("%s\n", NETSTACK_MAC.name);
+  PRINTF(" RDC: ");
+  PRINTF("%s", NETSTACK_RDC.name);
 
   if(NETSTACK_RDC.channel_check_interval() != 0) {
-    printf(", Channel Check Interval: %u ticks",
+    PRINTF(", Channel Check Interval: %u ticks",
            NETSTACK_RDC.channel_check_interval());
   }
-  printf("\n");
+  PRINTF("\n");
 
   netstack_init();
 

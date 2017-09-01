@@ -1505,7 +1505,7 @@ input(void)
 #if UIP_CONF_DS6_INTERFACES_NUMBER > 1
   // Select this (Radio) interface
   uip_ds6_select_netif(UIP_RADIO_INTERFACE_ID);
-  printf("* sicslowpan input: Select interface 0\n");
+  PRINTFI("* sicslowpan input: Select interface 0\n");
 #endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
   /* size of the IP packet (read from fragment) */
