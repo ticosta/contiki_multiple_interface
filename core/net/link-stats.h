@@ -42,6 +42,11 @@
 #define LINK_STATS_ETX_DIVISOR              128
 #endif /* LINK_STATS_CONF_ETX_DIVISOR */
 
+/* Allow disabling link statistics */
+#ifndef LINK_STATS_CONF_ENABLED
+#define LINK_STATS_CONF_ENABLED             1
+#endif /* LINK_STATS_CONF_ENABLED */
+
 /* All statistics of a given link */
 struct link_stats {
   uint16_t etx;               /* ETX using ETX_DIVISOR as fixed point divisor */

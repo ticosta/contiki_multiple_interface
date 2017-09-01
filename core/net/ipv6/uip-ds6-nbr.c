@@ -213,8 +213,10 @@ uip_ds6_link_neighbor_callback(int status, int numtx)
     return;
   }
 
+#if LINK_STATS_CONF_ENABLED
   /* Update neighbor link statistics */
   link_stats_packet_sent(dest, status, numtx);
+#endif /* LINK_STATS_CONF_ENABLED */
   /* Call upper-layer callback (e.g. RPL) */
   LINK_NEIGHBOR_CALLBACK(dest, status, numtx);
 

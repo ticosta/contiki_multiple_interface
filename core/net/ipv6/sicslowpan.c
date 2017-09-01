@@ -1523,8 +1523,10 @@ input(void)
   uint8_t first_fragment = 0, last_fragment = 0;
 #endif /*SICSLOWPAN_CONF_FRAG*/
 
+#if LINK_STATS_CONF_ENABLED
   /* Update link statistics */
   link_stats_input_callback(packetbuf_addr(PACKETBUF_ADDR_SENDER));
+#endif /* LINK_STATS_CONF_ENABLED */
 
   /* init */
   uncomp_hdr_len = 0;
