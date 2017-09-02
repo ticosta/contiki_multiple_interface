@@ -226,9 +226,11 @@ static void init_eth_if(void) {
   // Set site-local address and prefix
   uip_ip6addr(&loc_fipaddr, UIP_DS6_DEFAULT_PREFIX, 0, 0, 0, 0, 0, 0, 0);
 #if UIP_CONF_ROUTER
-  uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0, 0, 0, 0);
+  // TODO: This is correct, but because nbr-table only supports one prefix per MAC address we can't add this prefix - link-local prefix have the same MAC address
+  //uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0, 0, 0, 0);
 #else // UIP_CONF_ROUTER
-  uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0);
+  // TODO: This is correct, but because nbr-table only supports one prefix per MAC address we can't add this prefix - link-local prefix have the same MAC address
+  //uip_ds6_prefix_add(&loc_fipaddr, UIP_DEFAULT_PREFIX_LEN, 0);
 #endif // UIP_CONF_ROUTER
   uip_ip6addr(&loc_fipaddr, UIP_DS6_DEFAULT_PREFIX, 0, 0, 0, 0, 0, 0, IPV6_CONF_ADDR_8);
   uip_ds6_addr_add(&loc_fipaddr, 0, ADDR_TENTATIVE);
@@ -352,6 +354,7 @@ main(void)
 
   autostart_start(autostart_processes);
 
+  // TODO: repor?
   //watchdog_start();
 
   fade(LEDS_ORANGE);
@@ -360,6 +363,7 @@ main(void)
     uint8_t r;
     do {
       r = process_run();
+      // TODO: repor?
       //watchdog_periodic();
     } while(r > 0);
 
