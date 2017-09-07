@@ -31,7 +31,6 @@ static clock_time_t timedout(netctrl_node_t *node) {
 	clock_time_t currentTime = clock_time();
 	clock_time_t elapsed;
 
-	// TODO: test the overflow case
 	// handle overflows
 	if(currentTime < node->last_req_time) {
 		// TODO Use other defenition then UINT_MAX to be more portable - try using -1 with cast to unsigned...
@@ -43,7 +42,17 @@ static clock_time_t timedout(netctrl_node_t *node) {
 		// timeout
 		return 0;
 	}
-	return elapsed;
+	return timeout_value - elapsed;
+}
+
+static int node_table_is_empty() {
+	int i;
+	for(i = 0; i < NODE_TABLE_SIZE; i++) {
+		if(!uip_is_addr_unspecified(&node_table[i].ip_addr)) {
+			return 0;
+		}
+	}
+	return 1;
 }
 /*---------------------------------------------------------------------------*/
 void node_table_init(clock_time_t timeout) {
@@ -95,14 +104,15 @@ node_table_remove_node(netctrl_node_t *node) {
 	empty_entry = node;
 }
 /*---------------------------------------------------------------------------*/
-clock_time_t check_nodes() {
+clock_time_t node_table_refresh() {
 	// TODO: A cleanner way to do this (but more memory-consuming) is add a
 	// ctimer to each entry. Each ctimer is set with its timeout value and
 	// its callback removes its corresponding entry from the table.
 	// Every time a node send a new request its ctimer is reset.
 
 	// Default check time of 1 second
-	clock_time_t nextCheck = NODE_TABLE_DEFAULT_CHECK_TIME * CLOCK_SECOND;
+	// TODO Use other defenition then UINT_MAX to be more portable - try using -1 with cast to unsigned...
+	clock_time_t nextCheck = UINT_MAX;
 	int i;
 	for(i = 0; i < NODE_TABLE_SIZE; i++) {
 		if(!uip_is_addr_unspecified(&node_table[i].ip_addr)) {
@@ -113,6 +123,12 @@ clock_time_t check_nodes() {
 				nextCheck = MIN(nextCheck, node_timeout);
 			}
 		}
+	}
+
+	// When the table is empty, dont need to refresh it
+	if(node_table_is_empty()) {
+		// TODO Use other defenition then UINT_MAX to be more portable - try using -1 with cast to unsigned...
+		nextCheck = UINT_MAX;
 	}
 
 	return nextCheck;

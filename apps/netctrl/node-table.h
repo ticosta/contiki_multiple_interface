@@ -16,7 +16,7 @@
 #include <contiki-net.h>
 #include <stdint.h>
 
-#define NODE_TABLE_SIZE  10 /*!< Number of node that the table can store. */
+#define NODE_TABLE_SIZE  5 /*!< Number of node that the table can store. */
 #define NODE_TABLE_DEFAULT_CHECK_TIME  1 /*!< In seconds */
 
 /** Entry structure of node table. */
@@ -79,6 +79,13 @@ node_table_add_node(uip_ip6addr_t *ip_addr, uint32_t hash, uint16_t reqId,
  */
 void
 node_table_remove_node(netctrl_node_t *node);
+
+/**
+ * Verify all nodes looking for those who reach the maximum idle time and remove them.
+ *
+ * \return Returns the time until the next timeout in system ticks.
+ */
+clock_time_t node_table_refresh();
 
 
 #endif /* CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NODE_TABLE_NODE_TABLE_H_ */

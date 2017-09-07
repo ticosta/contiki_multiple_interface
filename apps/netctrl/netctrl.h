@@ -22,17 +22,18 @@
 #define NETCTRL_REQUEST_TYPE_REG    0x00
 #define NETCTRL_REQUEST_TYPE_RENEW  0x01
 
+#define NETCTRL_NOT_INITIALIZED               (-1)
+#define NETCTRL_INVALID_REQUEST               (-2)
 #define NETCTRL_RESPONSE_RESULT_REG_OK        0x00
 #define NETCTRL_RESPONSE_RESULT_REG_FAILED    0x01
 #define NETCTRL_RESPONSE_RESULT_RENEW_OK      0x02
 #define NETCTRL_RESPONSE_RESULT_RENEW_FAILED  0x03
 /**
  * Periodicity used by nodes to renew its registration.
- * (NETCTRL_DEFAULT_PERIODICITY * 2) should be lesser then NETCTRL_TIMEOUT_VALUE. This way a node can transmit a renew request twice in case the first fails.
+ * (NETCTRL_DEFAULT_PERIODICITY * 2) should be lesser then NETCTRL_IDLETIME_MAX_VALUE. This way a node can transmit a renew request twice in case the first fails.
  */
 #define NETCTRL_DEFAULT_PERIODICITY  8
-// TODO confirmar estes nomes com o relatório...
-#define NETCTRL_TIMEOUT_VALUE  20
+#define NETCTRL_IDLETIME_MAX_VALUE  20
 
 extern uint8_t netctrl_periodicity;
 
@@ -70,8 +71,10 @@ void netctrl_init();
 /*---------------------------------------------------------------------------*/
 /**
  * Server's handler for network events.
+ *
+ * \return Returns the result of the operation correonding to the response sent.
  */
-void netctrl_server_handle_net_event();
+int netctrl_server_handle_net_event();
 /*---------------------------------------------------------------------------*/
 /**
  * Client's handler for network events.
