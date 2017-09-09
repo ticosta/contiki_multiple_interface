@@ -1,4 +1,9 @@
-#include "netctrl.h"
+/**
+ * \addtogroup netctrl
+ * @{
+ */
+
+#include "netctrl-server.h"
 #include "node-table.h"
 #include "netctrl-platform.h"
 
@@ -32,7 +37,7 @@ static void normalize_req(netctrl_req_header_t *req) {
 }
 /*---------------------------------------------------------------------------*/
 static int handle_reg_request(netctrl_req_header_t *req) {
-	static netctrl_node_t * node;
+	static node_table_entry_t * node;
 	static netctrl_rsp_header_t *rsp;
 	static uint16_t reqId;
 	static int ret;
@@ -42,17 +47,21 @@ static int handle_reg_request(netctrl_req_header_t *req) {
 
 	if((node = node_table_get_node(
 			(uip_ip6addr_t *)netctrl_get_nodeId())) != NULL) {
+		PRINTF("  Node exists. Updating...\n");
 		// Updates the node entry
 		node_table_update_node(node, req->id, req->data);
 		rsp->result = NETCTRL_RESPONSE_RESULT_REG_OK;
 		ret = NETCTRL_RESPONSE_RESULT_REG_OK;
 	} else {
-		int ret = node_table_add_node((uip_ip6addr_t *)netctrl_get_nodeId(),
+		PRINTF("  Node doesnt exists.\n");
+		node_table_entry_t * new_node = node_table_add_node((uip_ip6addr_t *)netctrl_get_nodeId(),
 				netctrl_calc_node_hash(), req->id, req->data, req->eq_type);
-		if(ret == 0) {
+		if(new_node != NULL) {
+			PRINTF("  ** New Node added with hash %lu\n", (unsigned long)new_node->hash);
 			rsp->result = NETCTRL_RESPONSE_RESULT_REG_OK;
 			ret = NETCTRL_RESPONSE_RESULT_REG_OK;
 		} else {
+			PRINTF("  !!! Failed adding the new Node.\n");
 			rsp->result = NETCTRL_RESPONSE_RESULT_REG_FAILED;
 			ret = NETCTRL_RESPONSE_RESULT_REG_FAILED;
 		}
@@ -65,12 +74,12 @@ static int handle_reg_request(netctrl_req_header_t *req) {
 			netctrl_set_rsp_conf((char *)netctrl_rsp_conf(rsp)) :
 			0;
 
-	netctrl_send_message(uip_appdata, sizeof(netctrl_rsp_header_t) + rsp->conf_len);
+	netctrl_send_messageto(uip_appdata, NETCTRL_RSP_HEADER_SIZE + rsp->conf_len);
 	return ret;
 }
 /*---------------------------------------------------------------------------*/
 static int handle_renew_request(netctrl_req_header_t *req) {
-	static netctrl_node_t * node;
+	static node_table_entry_t * node;
 	static netctrl_rsp_header_t *rsp;
 	uint16_t reqId;
 	rsp = (netctrl_rsp_header_t *)netctrl_sdata_buffer;
@@ -80,23 +89,27 @@ static int handle_renew_request(netctrl_req_header_t *req) {
 	/* renew for an existing node? */
 	if((node = node_table_get_node(
 			(uip_ip6addr_t *)netctrl_get_nodeId())) == NULL) {
+		PRINTF("  Renew request for an unknown Node. Dropping.\n");
 		// Drop it!
 		return NETCTRL_RESPONSE_RESULT_RENEW_FAILED;
 	}
+	PRINTF("  Node exists.\n");
 	/* valid request id? */
 	if((req->id != netctrl_next_id(node->entry_version)) &&
 			(req->id != node->entry_version)) {
+		PRINTF("  Invalid request Id. Dropping.\n");
 		// Drop it!
 		return NETCTRL_RESPONSE_RESULT_RENEW_FAILED;
 	}
 
+	PRINTF("  Updating Node and sending response.\n");
 	node_table_update_node(node, req->id, req->data);
 	rsp->result = NETCTRL_RESPONSE_RESULT_RENEW_OK;
 	rsp->id = reqId;
 	rsp->periodicity = netctrl_periodicity;
 	rsp->conf_len = 0;
 
-	netctrl_send_message(uip_appdata, sizeof(netctrl_rsp_header_t));
+	netctrl_send_messageto(uip_appdata, NETCTRL_RSP_HEADER_SIZE);
 	return NETCTRL_RESPONSE_RESULT_RENEW_OK;
 }
 /*---------------------------------------------------------------------------*/
@@ -147,4 +160,8 @@ void netctrl_set_periodicity(uint8_t periodicity) {
 		return;
 	netctrl_periodicity = periodicity;
 }
+
+/**
+ * @}
+ */
 

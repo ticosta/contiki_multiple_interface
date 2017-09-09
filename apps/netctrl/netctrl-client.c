@@ -1,3 +1,8 @@
+/**
+ * \addtogroup netctrl
+ * @{
+ */
+
 #include <limits.h>
 
 #include "netctrl-client.h"
@@ -33,7 +38,7 @@ static netctrl_time_t netctrl_registration_stage(int event, netctrl_req_header_t
 		req->type = NETCTRL_REQUEST_TYPE_REG;
 		req->eq_type = NODE_EQUIPEMENT_TYPE;
 		req->data = htonl(netctrl_node_data);
-		netctrl_send_message((uint8_t *)req, sizeof(netctrl_req_header_t));
+		netctrl_send_message((uint8_t *)req, NETCTRL_REQ_HEADER_SIZE);
 		//
 		state = NETCTRL_CLIENT_WAIT_CONFIRM;
 		return REG_TIMEOUT;
@@ -62,6 +67,10 @@ static netctrl_time_t netctrl_wait_fort_rsp_stage(int event, netctrl_rsp_header_
 					state = NETCTRL_CLIENT_UNREGISTERED;
 					return REG_RETRY_TIME;
 				}
+				PRINTF("  !!! Unknown Result!\n");
+				// Unknown Result
+				state = NETCTRL_CLIENT_UNREGISTERED;
+				return REG_TIMEOUT;
 			} else {
 				PRINTF("  Discarding.\n");
 				// Wrong Id. Discard and retry later
@@ -119,7 +128,7 @@ static netctrl_time_t netctrl_registered_stage(int event, netctrl_rsp_header_t *
 			req->eq_type = NODE_EQUIPEMENT_TYPE;
 			req->data = htonl(netctrl_node_data);
 			//
-			netctrl_send_message((uint8_t *)req, sizeof(netctrl_req_header_t));
+			netctrl_send_message((uint8_t *)req, NETCTRL_REQ_HEADER_SIZE);
 			return periodicity;
 		}
 	}
@@ -168,4 +177,6 @@ netctrl_time_t netctrl_client_handle_event(int event) {
 	PRINTF("  !!! Something nasty occurred! Unknow state!na\n");
 	return (netctrl_time_t)UINT_MAX;
 }
-
+/**
+ * @}
+ */

@@ -1,16 +1,33 @@
+/**
+ * \addtogroup node-table
+ * @{
+ */
+
 #include "node-table.h"
 #include <string.h>
 #include <limits.h>
 
+#define DEBUG 1
+#if DEBUG
+#include <stdio.h>
+#define PRINTF(...) printf(__VA_ARGS__)
+#define PRINT6ADDR(addr) PRINTF("[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]", ((uint8_t *)addr)[0], ((uint8_t *)addr)[1], ((uint8_t *)addr)[2], ((uint8_t *)addr)[3], ((uint8_t *)addr)[4], ((uint8_t *)addr)[5], ((uint8_t *)addr)[6], ((uint8_t *)addr)[7], ((uint8_t *)addr)[8], ((uint8_t *)addr)[9], ((uint8_t *)addr)[10], ((uint8_t *)addr)[11], ((uint8_t *)addr)[12], ((uint8_t *)addr)[13], ((uint8_t *)addr)[14], ((uint8_t *)addr)[15])
+#define PRINTLLADDR(lladdr) PRINTF("[%02x:%02x:%02x:%02x:%02x:%02x]", (lladdr)->addr[0], (lladdr)->addr[1], (lladdr)->addr[2], (lladdr)->addr[3], (lladdr)->addr[4], (lladdr)->addr[5])
+#else
+#define PRINTF(...)
+#define PRINT6ADDR(addr)
+#define PRINTLLADDR(addr)
+#endif
+
 /** The table itself */
-static netctrl_node_t node_table[NODE_TABLE_SIZE];
+static node_table_entry_t node_table[NODE_TABLE_SIZE];
 /** Points to an empty entry in the table or NULL if the table its full. */
-static netctrl_node_t *empty_entry;
+static node_table_entry_t *empty_entry;
 /** A node is considered invalid if it is idle for more then the value in this variable. */
 static clock_time_t timeout_value;
 /*---------------------------------------------------------------------------*/
-static netctrl_node_t *get_first_empty_entry() {
-	netctrl_node_t *entry = NULL;
+static node_table_entry_t *get_first_empty_entry() {
+	node_table_entry_t *entry = NULL;
 	int i;
 	for(i = 0; i < NODE_TABLE_SIZE; i++) {
 		if(uip_is_addr_unspecified(&node_table[i].ip_addr)) {
@@ -27,13 +44,12 @@ static netctrl_node_t *get_first_empty_entry() {
  *
  * \return Returns the time in system ticks it need to wait until the timeout, or zero if it reached the timeout.
  */
-static clock_time_t timedout(netctrl_node_t *node) {
+static clock_time_t timedout(node_table_entry_t *node) {
 	clock_time_t currentTime = clock_time();
 	clock_time_t elapsed;
 
 	// handle overflows
 	if(currentTime < node->last_req_time) {
-		// TODO Use other defenition then UINT_MAX to be more portable - try using -1 with cast to unsigned...
 		currentTime = currentTime + (UINT_MAX - node->last_req_time) + 1;
 	}
 
@@ -61,7 +77,7 @@ void node_table_init(clock_time_t timeout) {
 	timeout_value = timeout;
 }
 /*---------------------------------------------------------------------------*/
-netctrl_node_t * node_table_get_node(uip_ip6addr_t * nodeIp) {
+node_table_entry_t * node_table_get_node(uip_ip6addr_t * nodeIp) {
 	int i;
 	for(i = 0; i < NODE_TABLE_SIZE; i++) {
 		if(memcmp(nodeIp, &(node_table[i].ip_addr), sizeof(uip_ip6addr_t)) == 0) {
@@ -71,19 +87,29 @@ netctrl_node_t * node_table_get_node(uip_ip6addr_t * nodeIp) {
 	return NULL;
 }
 /*---------------------------------------------------------------------------*/
+node_table_entry_t * node_table_get_node_by_hash(uint32_t nodeHash) {
+	int i;
+	for(i = 0; i < NODE_TABLE_SIZE; i++) {
+		if(nodeHash == node_table[i].hash) {
+			return &node_table[i];
+		}
+	}
+	return NULL;
+}
+/*---------------------------------------------------------------------------*/
 void
-node_table_update_node(netctrl_node_t *node, uint16_t version, uint32_t data) {
+node_table_update_node(node_table_entry_t *node, uint16_t version, uint32_t data) {
 	node->entry_version = version;
 	node->data = data;
 	node->last_req_time = clock_time();
 }
 /*---------------------------------------------------------------------------*/
-int
+node_table_entry_t *
 node_table_add_node(uip_ip6addr_t *ip_addr, uint32_t hash, uint16_t reqId,
 		uint32_t data, uint8_t eqType) {
 	/* full table? */
 	if(empty_entry == NULL) {
-		return -1;
+		return NULL;
 	}
 	memcpy(&(empty_entry->ip_addr), ip_addr, sizeof(uip_ip6addr_t));
 	empty_entry->hash = hash;
@@ -93,14 +119,16 @@ node_table_add_node(uip_ip6addr_t *ip_addr, uint32_t hash, uint16_t reqId,
 	empty_entry->entry_version = reqId;
 	empty_entry->type = eqType;
 
+	node_table_entry_t * tmp_ptr = empty_entry;
 	empty_entry = get_first_empty_entry();
 
-	return 0;
+	return tmp_ptr;
 }
 /*---------------------------------------------------------------------------*/
 void
-node_table_remove_node(netctrl_node_t *node) {
+node_table_remove_node(node_table_entry_t *node) {
 	memset(&(node->ip_addr), 0x0, sizeof(node->ip_addr));
+	node->hash = 0;
 	empty_entry = node;
 }
 /*---------------------------------------------------------------------------*/
@@ -110,14 +138,13 @@ clock_time_t node_table_refresh() {
 	// its callback removes its corresponding entry from the table.
 	// Every time a node send a new request its ctimer is reset.
 
-	// Default check time of 1 second
-	// TODO Use other defenition then UINT_MAX to be more portable - try using -1 with cast to unsigned...
 	clock_time_t nextCheck = UINT_MAX;
 	int i;
 	for(i = 0; i < NODE_TABLE_SIZE; i++) {
 		if(!uip_is_addr_unspecified(&node_table[i].ip_addr)) {
 			clock_time_t node_timeout = timedout(&node_table[i]);
 			if(node_timeout == 0) {
+				PRINTF("Node Table: Removing timed out Node with hash %lu\n", (unsigned long)node_table[i].hash);
 				node_table_remove_node(&node_table[i]);
 			} else {
 				nextCheck = MIN(nextCheck, node_timeout);
@@ -127,9 +154,13 @@ clock_time_t node_table_refresh() {
 
 	// When the table is empty, dont need to refresh it
 	if(node_table_is_empty()) {
-		// TODO Use other defenition then UINT_MAX to be more portable - try using -1 with cast to unsigned...
+		PRINTF("Empty Node Table.\n");
 		nextCheck = UINT_MAX;
 	}
 
 	return nextCheck;
 }
+
+/**
+ * @}
+ */

@@ -1,12 +1,17 @@
+#ifndef CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_PLATFORM_H_
+#define CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_PLATFORM_H_
+
+/**
+ * \addtogroup netctrl
+ * @{
+ */
+
 /*
  * @file     netctrl-platform.h
  * @brief    This header contains all the defenitions dependent from the OS/platform/etc
  * @version  0.1
  * @author   Claudio Prates & Ricardo Jesus & Tiago Costa
  */
-
-#ifndef CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_PLATFORM_H_
-#define CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_PLATFORM_H_
 
 #include "contiki.h"
 #include "uip.h"
@@ -16,7 +21,7 @@ extern uint32_t netctrl_node_data;
 
 typedef clock_time_t netctrl_time_t;
 
-#define netctrl_data_buffer  uip_appdata
+#define netctrl_data_buffer   (&uip_buf[UIP_IPUDPH_LEN + UIP_LLH_LEN])
 #define netctrl_sdata_buffer  uip_sappdata
 #define ntohs  uip_ntohs
 #define ntohl  uip_ntohl
@@ -66,5 +71,9 @@ void netctrl_send_message(uint8_t *data, uint16_t length);
  * \return Returns the node ID that sent the request.
  */
 void * netctrl_get_nodeId();
+
+/**
+ * @}
+ */
 
 #endif /* CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_PLATFORM_H_ */

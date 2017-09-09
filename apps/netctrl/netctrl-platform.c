@@ -1,3 +1,8 @@
+/**
+ * \addtogroup netctrl
+ * @{
+ */
+
 #include "netctrl-platform.h"
 #include "netctrl.h"
 #include "contiki-net.h"
@@ -66,3 +71,7 @@ uint32_t netctrl_calc_node_hash() {
 void * netctrl_get_nodeId() {
 	return (void *)&UIP_IP_BUF->srcipaddr;
 }
+
+/**
+ * @}
+ */

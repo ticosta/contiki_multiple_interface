@@ -1,5 +1,8 @@
+#ifndef CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_CLIENT_H_
+#define CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_CLIENT_H_
+
 /**
- * \defgroup netctrl-client
+ * \addtogroup netctrl
  * @{
  */
 
@@ -9,9 +12,6 @@
  * @version  0.1
  * @author   Claudio Prates & Ricardo Jesus & Tiago Costa
  */
-
-#ifndef CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_CLIENT_H_
-#define CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_CLIENT_H_
 
 #include <stdio.h>
 //
@@ -32,6 +32,10 @@
 #define REG_RETRY_TIME                        (REG_TIMEOUT / 2)
 //
 #define MAX_RENEW_RETRIES                     2
+//
+#ifndef NODE_EQUIPEMENT_TYPE
+#define NODE_EQUIPEMENT_TYPE                  0x0
+#endif /* NODE_EQUIPEMENT_TYPE */
 /*---------------------------------------------------------------------------*/
 /**
  * Client event's handler.
@@ -41,7 +45,7 @@
 netctrl_time_t netctrl_client_handle_event();
 /*---------------------------------------------------------------------------*/
 
-#endif /* CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_CLIENT_H_ */
 /**
  * @}
  */
+#endif /* CONTIKI_MULTIPLE_INTERFACE_APPS_NETCTRL_NETCTRL_CLIENT_H_ */
