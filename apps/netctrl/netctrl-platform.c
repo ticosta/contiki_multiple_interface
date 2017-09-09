@@ -19,7 +19,7 @@
 #define PRINTLLADDR(addr)
 #endif
 
-#define UIP_ETH_BUF                        ((struct uip_eth_hdr *)&uip_buf)
+//#define UIP_ETH_BUF                        ((struct uip_eth_hdr *)&uip_buf)
 #define UIP_IP_BUF                         ((struct uip_ip_hdr *)&uip_buf[UIP_LLH_LEN])
 #define UIP_UDP_BUF                        ((struct uip_udp_hdr *)&uip_buf[UIP_LLH_LEN + UIP_IPH_LEN])
 
@@ -61,9 +61,21 @@ uint32_t netctrl_calc_node_hash() {
     sum += UIP_IP_BUF->srcipaddr.u8[i];
   }
 
-  for(i = sizeof(UIP_ETH_BUF->src.addr) - 1; i >= 0; i--) {
+  /* FiXME
+   * This is only valid for packets incoming from the ethernet interface.
+   * For packets from the Radio interface, MAC address are atored in another
+   * local in memory.
+   *
+   * Adding MAC in the hash don't give us any advantage because in case
+   * the addresses are dynamic, the hash will change anyway...
+   * To be a static hash event with dynamic adresses, we need a serial
+   * number or something like this. So, if we still generate the ip addresses
+   * from node's MAC adresses we have what we want - A static hash for each node.
+   *
+   */
+  /*for(i = sizeof(UIP_ETH_BUF->src.addr) - 1; i >= 0; i--) {
     sum += UIP_ETH_BUF->src.addr[i];
-  }
+  }*/
 
   return (~sum) + 1;
 }
