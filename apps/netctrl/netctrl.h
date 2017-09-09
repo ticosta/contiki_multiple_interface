@@ -61,13 +61,14 @@ typedef struct {
 #define NETCTRL_RSP_HEADER_SIZE sizeof(netctrl_rsp_header_t)
 
 #define netctrl_rsp_conf(base)  ((uint8_t *)((base) + NETCTRL_RSP_HEADER_SIZE)) /*!< Used to retreive the configuration addr field from rsponse packets. */
+#define netctrl_next_id(current_id)  ((current_id) + 1)
 
 #define NETCTRL_DEFAULT_LISTEN_PORT  10100
 /*---------------------------------------------------------------------------*/
 /**
  * Initializes all necessary data structures and mechanisms of the protocoll.
  */
-void netctrl_init();
+void netctrl_server_init();
 /*---------------------------------------------------------------------------*/
 /**
  * Server's handler for network events.
@@ -75,11 +76,6 @@ void netctrl_init();
  * \return Returns the result of the operation correonding to the response sent.
  */
 int netctrl_server_handle_net_event();
-/*---------------------------------------------------------------------------*/
-/**
- * Client's handler for network events.
- */
-void netctrl_client_handle_net_event();
 /*---------------------------------------------------------------------------*/
 /**
  * Used to set new periodicity values.

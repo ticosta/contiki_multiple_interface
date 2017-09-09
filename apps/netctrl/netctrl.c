@@ -17,8 +17,6 @@
 #define PRINTLLADDR(addr)
 #endif
 
-#define netctrl_next_id(current_id)  ((current_id) + 1)
-
 static int initialized = 0;
 uint8_t netctrl_periodicity = NETCTRL_DEFAULT_PERIODICITY;
 
@@ -102,8 +100,8 @@ static int handle_renew_request(netctrl_req_header_t *req) {
 	return NETCTRL_RESPONSE_RESULT_RENEW_OK;
 }
 /*---------------------------------------------------------------------------*/
-void netctrl_init() {
-	netctrl_init_network();
+void netctrl_server_init() {
+	netctrl_server_init_network();
   //
   node_table_init(NETCTRL_IDLETIME_MAX_VALUE);
   initialized = 1;
@@ -142,15 +140,6 @@ int netctrl_server_handle_net_event() {
 	}
 
 	return NETCTRL_INVALID_REQUEST;
-}
-/*---------------------------------------------------------------------------*/
-void netctrl_client_handle_net_event() {
-	// FIXME Currently the implementation don't use the configurations feature, thus,
-	//       don't need to worrie abount the response size.
-	//       In the future, need to check the MSS configured in the system and use a local buffer
-	//       or limit the configuration size to de MSS.
-
-	// TODO
 }
 /*---------------------------------------------------------------------------*/
 void netctrl_set_periodicity(uint8_t periodicity) {

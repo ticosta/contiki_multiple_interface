@@ -1,1 +1,1 @@
-netctrl_src = netctrl-platform.c netctrl.c node-table.c
+netctrl_src = netctrl-platform.c netctrl.c netctrl-client.c node-table.c

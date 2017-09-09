@@ -21,17 +21,30 @@
 static struct uip_udp_conn *netctrl_udp_conn = NULL;
 /*---------------------------------------------------------------------------*/
 void
-netctrl_send_message(uint8_t *data, uint16_t length)
-{
+netctrl_send_messageto(uint8_t *data, uint16_t length) {
   uip_udp_packet_sendto(netctrl_udp_conn, data, length,
    &UIP_IP_BUF->srcipaddr, UIP_UDP_BUF->srcport);
 }
+
+void
+netctrl_send_message(uint8_t *data, uint16_t length) {
+	uip_udp_packet_send(netctrl_udp_conn, data, length);
+}
 /*---------------------------------------------------------------------------*/
-void netctrl_init_network() {
+void netctrl_server_init_network() {
   /* new connection with remote host */
   netctrl_udp_conn = udp_new(NULL, 0, NULL);
   udp_bind(netctrl_udp_conn, UIP_HTONS(NETCTRL_DEFAULT_LISTEN_PORT));
   PRINTF("Netctrl listening on port %u\n", ntohs(netctrl_udp_conn->lport));
+}
+/*---------------------------------------------------------------------------*/
+void netctrl_client_init_network(const uip_ipaddr_t *addr, uint16_t port) {
+  /* new connection with remote host */
+  netctrl_udp_conn = udp_new(addr, UIP_HTONS(port), NULL);
+
+  PRINTF("Netctrl configured with remote address ");
+  PRINT6ADDR(addr);
+  PRINTF(" on port %u\n", ntohs(netctrl_udp_conn->rport));
 }
 /*---------------------------------------------------------------------------*/
 // TODO Improve this function. Currently its easy to get duplicated values. For the same node, its result needs to be alwais the same, so it can not be based on time.

@@ -12,16 +12,29 @@
 #include "uip.h"
 
 extern void *uip_sappdata;
+extern uint32_t netctrl_node_data;
+
+typedef clock_time_t netctrl_time_t;
 
 #define netctrl_data_buffer  uip_appdata
 #define netctrl_sdata_buffer  uip_sappdata
 #define ntohs  uip_ntohs
 #define ntohl  uip_ntohl
+#define htons  uip_htons
+#define htonl  uip_htonl
 /*---------------------------------------------------------------------------*/
 /**
  * Responsible for initializes the necessary UDP connection for the server.
  */
-void netctrl_init_network();
+void netctrl_server_init_network();
+/*---------------------------------------------------------------------------*/
+/**
+ * Responsible for initializes the necessary UDP connection for the client.
+ *
+ * \param addr Server's address
+ * \param port Listening port on the server.
+ */
+void netctrl_client_init_network(const uip_ipaddr_t *addr, uint16_t port);
 /*---------------------------------------------------------------------------*/
 /**
  * Used to build the node hash.
@@ -31,9 +44,17 @@ void netctrl_init_network();
 uint32_t netctrl_calc_node_hash();
 /*---------------------------------------------------------------------------*/
 /**
- * Used to send messages to nodes or controller.
+ * Used to send messages to nodes.
  *
- * \param data Data to be sent.
+ * \param data Data to be sent. Used by server side to send messages to different destinations.
+ * \param length Data length in bytes.
+ */
+void netctrl_send_messageto(uint8_t *data, uint16_t length);
+/*---------------------------------------------------------------------------*/
+/**
+ * Used to send messages to controller.
+ *
+ * \param data Data to be sent. Used by client side to send messages olways for the same destination.
  * \param length Data length in bytes.
  */
 void netctrl_send_message(uint8_t *data, uint16_t length);
