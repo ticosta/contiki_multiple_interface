@@ -68,9 +68,9 @@ uint32_t netctrl_calc_node_hash() {
    *
    * Adding MAC in the hash don't give us any advantage because in case
    * the addresses are dynamic, the hash will change anyway...
-   * To be a static hash event with dynamic adresses, we need a serial
-   * number or something like this. So, if we still generate the ip addresses
-   * from node's MAC adresses we have what we want - A static hash for each node.
+   * To be a static hash even with dynamic adresses, we need a serial
+   * number or something like that. So, if we stil generate the ip addresses
+   * based on node's MAC adresses we have what we want - A static hash for each node.
    *
    */
   /*for(i = sizeof(UIP_ETH_BUF->src.addr) - 1; i >= 0; i--) {

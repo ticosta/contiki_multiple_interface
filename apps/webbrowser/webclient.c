@@ -42,7 +42,7 @@
 /************************/
 /// Changed from original
 //#include <stdio.h> // for sprintf
-#include <stdlib.h> // for itoa
+#include <stdlib.h>
 /************************/
 
 #define WEBCLIENT_TIMEOUT 100
@@ -85,6 +85,9 @@ struct webclient_state {
   uint8_t sizeOfBuffer;
   /************************/
 };
+
+/* Explicitly declare itoa as it is non-standard and not necessarily in stdlib.h */
+char *itoa(int value, char *str, int base);
 
 static struct webclient_state s;
 
@@ -142,11 +145,10 @@ init_connection(void)
       s.getrequestleft += sizeof(http_post) - 1;
 
       char conv[4];
-      //sprintf(conv,"%d",s.sizeOfBuffer);
       itoa(s.sizeOfBuffer, conv, 10);
       s.getrequestleft += strlen("Content-Length: ") + strlen(conv) + sizeof(http_crnl) - 1;
 
-      s.getrequestleft += strlen("Content-Type: text/plain") + sizeof(http_crnl) - 1
+      s.getrequestleft += strlen("Content-Type: application/json") + sizeof(http_crnl) - 1
                  + s.sizeOfBuffer;
  }
   /************************/
@@ -205,7 +207,8 @@ webclient_get(const char *host, uint16_t port, const char *file)
 /************************/
 /// Changed from original
 unsigned char
-webclient_post(char *host, uint16_t port, char *file, char* dataToSend){
+webclient_post(char *host, uint16_t port, char *path, uint16_t path_len,
+		char* payload, uint16_t payload_len){
     struct uip_conn *conn;
     uip_ipaddr_t * ipaddr;
     static uip_ipaddr_t addr;
@@ -233,17 +236,15 @@ webclient_post(char *host, uint16_t port, char *file, char* dataToSend){
     strncpy(s.method, http_post, sizeof(http_post));
     s.method[sizeof(http_post)] = '\0';
 
-    int len = strlen(dataToSend);
-
     /* Buffer too small can't send */
-    if( len > sizeof(s.bufferToSend) )
+    if( payload_len > sizeof(s.bufferToSend) )
       return 0;
 
-    s.sizeOfBuffer = strlen(dataToSend);
-    strncpy( s.bufferToSend, dataToSend, s.sizeOfBuffer);
+    s.sizeOfBuffer = payload_len;
+    memcpy(s.bufferToSend, payload, s.sizeOfBuffer);
 
     s.port = port;
-    strncpy(s.file, file, strlen(file));
+    memcpy(s.file, path, path_len);
     strncpy(s.host, host, strlen(host));
 
     init_connection();
@@ -339,7 +340,7 @@ senddata(void)
 
         curptr = window_copy(curptr, "Content-Type: ",
                 strlen("Content-Type: "));
-        curptr = window_copy(curptr, "text/plain", strlen("text/plain"));
+        curptr = window_copy(curptr, CONTENT_TYPE_JSON, strlen(CONTENT_TYPE_JSON));
         curptr = window_copy(curptr, http_crnl, sizeof(http_crnl) - 1);
     }
 

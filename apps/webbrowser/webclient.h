@@ -39,6 +39,8 @@
 #include "http-user-agent-string.h"
 
 
+#define CONTENT_TYPE_JSON  "application/json"
+
 /* Callback functions that have to be implemented by the application
    program. */
 struct webclient_state;
@@ -52,7 +54,8 @@ void webclient_closed(void);
 /* Functions. */
 void webclient_init(void);
 unsigned char webclient_get(const char *host, uint16_t port, const char *file);
-unsigned char webclient_post(char *host, uint16_t port, char *file, char* dataToSend);
+unsigned char
+webclient_post(char *host, uint16_t port, char *path, uint16_t path_len, char* payload, uint16_t payload_len);
 void webclient_close(void);
 
 void webclient_appcall(void *state);
