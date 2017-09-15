@@ -71,7 +71,7 @@
 // POST val max bytes -> After parsed. Count with null terminator
 #define POST_PARAMS_VAL_MAX_LEN					11 /*!< Val Max Size */
 /*---------------------------------------------------------------------------*/
-#define CONNS                2 					/*!< Max Connections */
+#define CONNS                1 					/*!< Max Connections */
 #define CONTENT_LENGTH_MAX   256				/*!< Max Content-Length */
 #define STATE_WAITING        0x1				/*!< Waiting */
 #define STATE_OUTPUT         0x2				/*!< Ouput */

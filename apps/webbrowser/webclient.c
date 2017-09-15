@@ -38,6 +38,7 @@
 #include "www.h"
 
 #include "webclient.h"
+#include "http_request.h"
 
 /************************/
 /// Changed from original
@@ -81,7 +82,7 @@ struct webclient_state {
   /************************/
   /// Changed from original
   char method[10];
-  char bufferToSend[512];
+  char bufferToSend[PAYLOAD_MAX_SIZE];
   uint8_t sizeOfBuffer;
   /************************/
 };
@@ -125,6 +126,7 @@ webclient_init(void)
 static void
 init_connection(void)
 {
+	static char conv[11];
   s.state = WEBCLIENT_STATE_STATUSLINE;
 
   s.getrequestleft = /*sizeof(http_get) - 1 +*/ 1 +
@@ -144,7 +146,6 @@ init_connection(void)
   if (strcmp(s.method, http_post) == 0) {
       s.getrequestleft += sizeof(http_post) - 1;
 
-      char conv[4];
       itoa(s.sizeOfBuffer, conv, 10);
       s.getrequestleft += strlen("Content-Length: ") + strlen(conv) + sizeof(http_crnl) - 1;
 
@@ -242,6 +243,7 @@ webclient_post(char *host, uint16_t port, char *path, uint16_t path_len,
 
     s.sizeOfBuffer = payload_len;
     memcpy(s.bufferToSend, payload, s.sizeOfBuffer);
+    s.bufferToSend[s.sizeOfBuffer] = '\0';
 
     s.port = port;
     memcpy(s.file, path, path_len);
@@ -302,6 +304,7 @@ senddata(void)
 {
   uint16_t len;
   int curptr;
+  char conv[11];
   
   if(s.getrequestleft > 0) {
 
@@ -328,9 +331,7 @@ senddata(void)
     /************************/
     /// Changed from original
     if (strcmp(s.method, http_post) == 0) {
-        char conv[4];
-        //sprintf(conv,"%d",strlen(s.bufferToSend));
-        itoa(strlen(s.bufferToSend), conv, 10);
+        itoa(s.sizeOfBuffer, conv, 10);
         curptr = window_copy(curptr, "Content-Length: ",
                 strlen("Content-Length: "));
 

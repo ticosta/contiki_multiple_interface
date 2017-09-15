@@ -43,7 +43,10 @@ static char content_len_buf[CONTENT_LENGTH_BUFF_SIZE]; /*!< Used to temporarily 
 static int
 http_get_variable(const char *buffer, size_t length, const char *name,
                   const char **output);
-
+/*---------------------------------------------------------------------------*/
+/* Explicitly declare itoa as it is non-standard and not necessarily in stdlib.h */
+char *itoa(int value, char *str, int base);
+/*---------------------------------------------------------------------------*/
 /**
  * @brief Initialize the REST implementation.
  *
