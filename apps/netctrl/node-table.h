@@ -16,8 +16,10 @@
 #include <contiki-net.h>
 #include <stdint.h>
 
-#ifndef NODE_TABLE_CONF_SIZE
-#define NODE_TABLE_SIZE  5 /*!< Number of nodes that the table can store. */
+#ifndef NODE_TABLE_CONF_SIZE /*!< Number of nodes that the table can store. */
+#define NODE_TABLE_SIZE  5
+#else
+#define NODE_TABLE_SIZE  NODE_TABLE_CONF_SIZE
 #endif /* NODE_TABLE_CONF_SIZE */
 #define NODE_TABLE_DEFAULT_CHECK_TIME  1 /*!< In seconds */
 
