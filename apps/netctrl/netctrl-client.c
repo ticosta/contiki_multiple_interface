@@ -177,6 +177,10 @@ netctrl_time_t netctrl_client_handle_event(int event) {
 	PRINTF("  !!! Something nasty occurred! Unknow state!na\n");
 	return (netctrl_time_t)UINT_MAX;
 }
+/*---------------------------------------------------------------------------*/
+uint8_t netctrl_is_registered() {
+	return state == NETCTRL_CLIENT_REGISTERED;
+}
 /**
  * @}
  */

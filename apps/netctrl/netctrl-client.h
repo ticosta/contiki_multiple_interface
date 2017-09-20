@@ -44,7 +44,12 @@
  */
 netctrl_time_t netctrl_client_handle_event();
 /*---------------------------------------------------------------------------*/
-
+/**
+ *  Used to know if the node is registered or not.
+ *
+ *  \return Return 1 if registered, 0 if not.
+ */
+uint8_t netctrl_is_registered();
 /**
  * @}
  */
