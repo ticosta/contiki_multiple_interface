@@ -346,14 +346,24 @@ PT_THREAD(handle_output(httpd_state *s))
 			  ));
 
 	/* Send response body */
-	// Guarantees the null terminator
-    int idx = MIN(s->response.blen, HTTPD_SIMPLE_MAIN_BUF_SIZE - 1);
-    s->response.buf[idx] = ISO_null_term;
-	PT_WAIT_THREAD(&s->outputpt, send_string(s, s->response.buf));
-//	PT_WAIT_THREAD(
-//			&s->outputpt,
-//			enqueue_chunk(s, 1, s->response.buf)
+    if(s->response.large_rsp == RESPONSE_TYPE_NORMAL) {
+	  // Guarantees the null terminator
+      int idx = MIN(s->response.blen, HTTPD_SIMPLE_MAIN_BUF_SIZE - 1);
+      s->response.buf[idx] = ISO_null_term;
+	  PT_WAIT_THREAD(&s->outputpt, send_string(s, s->response.buf));
+//  	PT_WAIT_THREAD(
+//	  		&s->outputpt,
+//		  	enqueue_chunk(s, 1, s->response.buf)
 //			);
+    } else if (s->response.large_rsp == RESPONSE_TYPE_LARGE) {
+      if(s->response.large_rsp_hnd != NULL) {
+    	  while(s->response.large_rsp_hnd(&s->response.buf, HTTPD_SIMPLE_MAIN_BUF_SIZE) > 0) {
+    		  PT_WAIT_THREAD(&s->outputpt, send_string(s, s->response.buf));
+    	  }
+      } else {
+        PRINTF("\n\n!!! Large response with no handler!\n\n");
+      }
+    }
   }
 
   PSOCK_CLOSE(&s->sout);
@@ -624,6 +634,8 @@ static void reset_http_state_obj(httpd_state *s) {
 	s->response.additional_hdrs = 0;
 	s->response.content_type = 0;
 	s->response.redir_path = 0;
+	s->response.large_rsp = RESPONSE_TYPE_NORMAL;
+	s->response.large_rsp_hnd = NULL;
     memset(s->buffer, 0, sizeof(s->buffer));
 }
 

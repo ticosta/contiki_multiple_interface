@@ -74,7 +74,7 @@ static int node_table_is_empty() {
 void node_table_init(clock_time_t timeout) {
 	memset(&node_table, 0x0, sizeof(node_table));
 	empty_entry = node_table;
-	timeout_value = timeout;
+	timeout_value = timeout * CLOCK_SECOND;
 }
 /*---------------------------------------------------------------------------*/
 node_table_entry_t * node_table_get_node(uip_ip6addr_t * nodeIp) {
@@ -160,7 +160,27 @@ clock_time_t node_table_refresh() {
 
 	return nextCheck;
 }
+/*---------------------------------------------------------------------------*/
+void node_table_init_iterator(node_table_iterator_t *it) {
+	it->idx = -1;
+	it->node = NULL;
+}
+/*---------------------------------------------------------------------------*/
+int node_table_iterate(node_table_iterator_t *it) {
+	int i;
 
+	// Select the beginning or the next one
+	i = (it->idx < 0)? 0 : it->idx + 1;
+	for(; i < NODE_TABLE_SIZE; i++) {
+		if(!uip_is_addr_unspecified(&node_table[i].ip_addr)) {
+			it->node = &node_table[i];
+			it->idx = i;
+			return 0;
+		}
+	}
+
+	return -1;
+}
 /**
  * @}
  */

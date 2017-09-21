@@ -49,6 +49,7 @@
 #ifndef HTTPD_SIMPLE_H_
 #define HTTPD_SIMPLE_H_
 
+#include <stddef.h>
 #include "process.h"
 #include "error_codes.h"
 

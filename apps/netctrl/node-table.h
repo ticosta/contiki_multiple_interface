@@ -35,7 +35,12 @@ typedef struct {
 	uint8_t requests; /*!< Number of requests currently being processed for this Node */
 	void * node_data; /*!< normally used to point to the http_state when passed to CoAP client process */
 } node_table_entry_t;
-
+/*---------------------------------------------------------------------------*/
+/** Used to iterate the tabel. Must be initialized with 'node_table_init_iterator' before use */
+typedef struct {
+	int idx;
+	node_table_entry_t *node;
+} node_table_iterator_t;
 /*---------------------------------------------------------------------------*/
 /**
  * Initializes the table.
@@ -101,6 +106,20 @@ node_table_remove_node(node_table_entry_t *node);
  * \return Returns the time until the next timeout in system ticks.
  */
 clock_time_t node_table_refresh();
+/*---------------------------------------------------------------------------*/
+/**
+ * Used to initialize an iterator.
+ *
+ * \param it Iterator to be initialized.
+ */
+void node_table_init_iterator(node_table_iterator_t *it);
+/*---------------------------------------------------------------------------*/
+/**
+ * Iterates the tables with an iterator
+ *
+ * \param it Initialized iterator.
+ */
+int node_table_iterate(node_table_iterator_t *it);
 
 /**
  * @}

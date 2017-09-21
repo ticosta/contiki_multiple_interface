@@ -18,6 +18,7 @@
 #ifndef ER_HTTP_H_
 #define ER_HTTP_H_
 /*---------------------------------------------------------------------------*/
+#include <stddef.h>
 #include "contiki-net.h"
 #include "sys/process.h"
 #include "rest-engine.h"
@@ -45,22 +46,27 @@
 #define REQUEST_TYPE_POST 2 /*!< HTTP Method POST */
 #define REQUEST_TYPE_PUT 3 /*!< HTTP Method PUT */
 #define REQUEST_TYPE_DELETE 4 /*!< HTTP Method DELETE */
+#define RETURN_CODE_TL   5 /*!< Content Length too Large */
+/*---------------------------------------------------------------------------*/
+#define RESPONSE_TYPE_NORMAL  0
+#define RESPONSE_TYPE_LARGE  1
 /*---------------------------------------------------------------------------*/
 //
 #define HTTP_ACCEPT_HEADER_TEXT_PLAIN			1 << 1 /*!< Bit for Header Accept - TEXT-PLAIN */
 #define HTTP_ACCEPT_HEADER_APPLICATION_JSON 	1 << 2 /*!< Bit for Header Accept - APPLICATION_JSON */
 #define HTTP_ACCEPT_HEADER_APPLICATION_XML	 	1 << 3 /*!< Bit for Header Accept - APPLICATION_XML */
 #define MAX_URI_LEN	                            50 /*!< The MAX URI  */
-
+/*---------------------------------------------------------------------------*/
 #define MAX_PAYLOAD_SIZE                        100 /*!< Payload Size */
-
+/*---------------------------------------------------------------------------*/
 #define RETURN_CODE_OK   0 /*!< Status OK */
 #define RETURN_CODE_NF   1 /*!< Not Found */
 #define RETURN_CODE_SU   2 /*!< Service Unavailable */
 #define RETURN_CODE_BR   3 /*!< Bad Request */
 #define RETURN_CODE_LR   4 /*!< Length Required */
-#define RETURN_CODE_TL   5 /*!< Content Length too Large */
-
+/*---------------------------------------------------------------------------*/
+/** Data written to the arg 'buffer' MUST end with Null terminator! Otherwise the behavior is unknown */
+typedef int (* httpd_large_rsp_hnd)(void * buffer, size_t buf_len);
 /*---------------------------------------------------------------------------*/
 typedef struct http_response_t {
 	char buf[HTTPD_SIMPLE_MAIN_BUF_SIZE]; /*!< Buffer */
@@ -71,6 +77,8 @@ typedef struct http_response_t {
 	const char **additional_hdrs; /*!< Optional headers of response */
 	const char * redir_path; /*!< Location for redirect */
 	char immediate_response; /*!< Bit for if response should be immediate */
+	char large_rsp; /*!< Used to destiguish beteewn a 'normal' response or a large response. */
+	httpd_large_rsp_hnd large_rsp_hnd; /*!< handle called by the httpd server to compose the response body */
 } http_response;
 /*---------------------------------------------------------------------------*/
 typedef struct coap_request_params_t {
