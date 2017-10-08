@@ -55,7 +55,8 @@ void webclient_closed(void);
 void webclient_init(void);
 unsigned char webclient_get(const char *host, uint16_t port, const char *file);
 unsigned char
-webclient_post(char *host, uint16_t port, char *path, uint16_t path_len, char* payload, uint16_t payload_len);
+webclient_post(char *host, uint16_t port, char *path, uint16_t path_len,
+		char* payload, uint16_t payload_len, uint32_t requester_hash);
 void webclient_close(void);
 
 void webclient_appcall(void *state);

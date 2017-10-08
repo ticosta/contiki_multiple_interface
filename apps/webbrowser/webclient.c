@@ -42,8 +42,9 @@
 
 /************************/
 /// Changed from original
-//#include <stdio.h> // for sprintf
+#include <stdio.h> // for sprintf
 #include <stdlib.h>
+#include <limits.h>
 /************************/
 
 #define WEBCLIENT_TIMEOUT 100
@@ -84,6 +85,9 @@ struct webclient_state {
   char method[10];
   char bufferToSend[PAYLOAD_MAX_SIZE];
   uint8_t sizeOfBuffer;
+  uint32_t node_hash_size;
+  // 11 -> string constant | 10 -> uint32 max digits | 1 -> null terminator
+  uint8_t hash_str[12 + 10 + 1];
   /************************/
 };
 
@@ -151,6 +155,7 @@ init_connection(void)
 
       s.getrequestleft += strlen("Content-Type: application/json") + sizeof(http_crnl) - 1
                  + s.sizeOfBuffer;
+      s.getrequestleft += s.node_hash_size;
  }
   /************************/
   s.getrequestptr = 0;
@@ -209,7 +214,7 @@ webclient_get(const char *host, uint16_t port, const char *file)
 /// Changed from original
 unsigned char
 webclient_post(char *host, uint16_t port, char *path, uint16_t path_len,
-		char* payload, uint16_t payload_len){
+		char* payload, uint16_t payload_len, uint32_t requester_hash){
     struct uip_conn *conn;
     uip_ipaddr_t * ipaddr;
     static uip_ipaddr_t addr;
@@ -231,6 +236,9 @@ webclient_post(char *host, uint16_t port, char *path, uint16_t path_len,
     if (conn == NULL) {
         return 0;
     }
+
+    // Process the requester identifier to send as header
+    s.node_hash_size = snprintf((char *)s.hash_str, sizeof(s.hash_str), http_hash_node, requester_hash);
 
     s.bufferToSend[0] = '\0';
 
@@ -346,6 +354,7 @@ senddata(void)
     }
 
     /************************/
+    curptr = window_copy(curptr, (const char *)s.hash_str, (unsigned char)s.node_hash_size);
 
     curptr = window_copy(curptr, http_user_agent_fields,
 		       (unsigned char)strlen(http_user_agent_fields));
