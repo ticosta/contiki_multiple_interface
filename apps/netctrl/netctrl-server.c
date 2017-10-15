@@ -50,6 +50,8 @@ static int handle_reg_request(netctrl_req_header_t *req) {
 		PRINTF("  Node exists. Updating...\n");
 		// Updates the node entry
 		node_table_update_node(node, req->id, req->data);
+		// reset registration timestamp
+		node->timestamp = clock_time();
 		rsp->result = NETCTRL_RESPONSE_RESULT_REG_OK;
 		ret = NETCTRL_RESPONSE_RESULT_REG_OK;
 	} else {

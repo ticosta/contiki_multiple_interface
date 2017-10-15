@@ -114,7 +114,7 @@ node_table_add_node(uip_ip6addr_t *ip_addr, uint32_t hash, uint16_t reqId,
 	memcpy(&(empty_entry->ip_addr), ip_addr, sizeof(uip_ip6addr_t));
 	empty_entry->hash = hash;
 	empty_entry->data = data;
-	empty_entry->timestamp = clock_time();;
+	empty_entry->timestamp = clock_time();
 	empty_entry->last_req_time = empty_entry->timestamp;
 	empty_entry->entry_version = reqId;
 	empty_entry->type = eqType;
