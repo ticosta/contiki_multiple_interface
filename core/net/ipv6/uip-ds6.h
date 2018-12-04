@@ -267,16 +267,55 @@ typedef struct uip_ds6_element {
 
 
 /*---------------------------------------------------------------------------*/
-extern uip_ds6_netif_t uip_ds6_if;
-extern struct etimer uip_ds6_timer_periodic;
+
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+
+	extern struct etimer __uip_ds6_timer_periodic[UIP_CONF_DS6_INTERFACES_NUMBER];
+#define uip_ds6_timer_periodic				(__uip_ds6_timer_periodic[if_ds6_selector])
 
 #if UIP_CONF_ROUTER
-extern uip_ds6_prefix_t uip_ds6_prefix_list[UIP_DS6_PREFIX_NB];
+	// RA timers
+	extern struct stimer __uip_ds6_timer_ra[UIP_CONF_DS6_INTERFACES_NUMBER];
+#define uip_ds6_timer_ra					(__uip_ds6_timer_ra[if_ds6_selector])
 #else /* UIP_CONF_ROUTER */
-extern struct etimer uip_ds6_timer_rs;
+	//RS timers
+	extern struct etimer __uip_ds6_timer_rs[UIP_CONF_DS6_INTERFACES_NUMBER];
+#define uip_ds6_timer_rs					(__uip_ds6_timer_rs[if_ds6_selector])
+#define rscount								(__rscount[if_ds6_selector])
 #endif /* UIP_CONF_ROUTER */
 
+	extern uip_ds6_netif_t __uip_ds6_if[UIP_CONF_DS6_INTERFACES_NUMBER];
+	extern uip_ds6_prefix_t __uip_ds6_prefix_list[UIP_CONF_DS6_INTERFACES_NUMBER][UIP_DS6_PREFIX_NB];
+#else /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
+	extern uip_ds6_netif_t __uip_ds6_if[1];
+	extern uip_ds6_prefix_t __uip_ds6_prefix_list[1][UIP_DS6_PREFIX_NB];
+	extern struct etimer uip_ds6_timer_periodic;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 
+extern uint8_t if_ds6_selector;
+#define uip_ds6_if							(__uip_ds6_if[if_ds6_selector])
+#define uip_ds6_prefix_list					(__uip_ds6_prefix_list[if_ds6_selector])
+
+
+#if !UIP_CONF_ROUTER && UIP_CONF_DS6_INTERFACES_NUMBER <= 1
+	extern struct etimer uip_ds6_timer_rs;
+#endif /* UIP_CONF_ROUTER */
+
+/** \brief Select the interface identified by netif_idx index */
+#define uip_ds6_select_netif(netif_idx)		(if_ds6_selector = netif_idx)
+/*---------------------------------------------------------------------------*/
+// The default neighbor MUST be in this default interface
+#ifdef UIP_CONF_DEFAULT_INTERFACE_ID
+#define UIP_DEFAULT_INTERFACE_ID			UIP_CONF_DEFAULT_INTERFACE_ID
+#else /* UIP_CONF_DEFAULT_INTERFACE_ID */
+#define UIP_DEFAULT_INTERFACE_ID			(1) /* usually ethernet interface */
+#endif /* UIP_CONF_DEFAULT_INTERFACE_ID */
+//
+#ifdef UIP_CONF_RADIO_INTERFACE_ID
+#define UIP_RADIO_INTERFACE_ID				UIP_CONF_RADIO_INTERFACE_ID
+#else /* UIP_CONF_RADIO_INTERFACE_ID */
+#define UIP_RADIO_INTERFACE_ID				(0) /* radio interface */
+#endif /* UIP_CONF_RADIO_INTERFACE_ID */
 /*---------------------------------------------------------------------------*/
 /** \brief Initialize data structures */
 void uip_ds6_init(void);

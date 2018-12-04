@@ -76,7 +76,7 @@
 #include "lib/random.h"
 
 /*------------------------------------------------------------------*/
-#define DEBUG 0
+#define DEBUG DEBUG_NONE
 #include "net/ip/uip-debug.h"
 
 #if UIP_LOGGING
@@ -296,11 +296,11 @@ ns_input(void)
       goto discard;
     }
 #endif /*UIP_CONF_IPV6_CHECKS */
-
     /* Address resolution case */
     if(uip_is_addr_solicited_node(&UIP_IP_BUF->destipaddr)) {
       uip_ipaddr_copy(&UIP_IP_BUF->destipaddr, &UIP_IP_BUF->srcipaddr);
       uip_ipaddr_copy(&UIP_IP_BUF->srcipaddr, &UIP_ND6_NS_BUF->tgtipaddr);
+
       flags = UIP_ND6_NA_FLAG_SOLICITED | UIP_ND6_NA_FLAG_OVERRIDE;
       goto create_na;
     }

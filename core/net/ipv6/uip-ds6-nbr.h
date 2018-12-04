@@ -77,7 +77,10 @@ typedef struct uip_ds6_nbr {
 #if UIP_CONF_IPV6_QUEUE_PKT
   struct uip_packetqueue_handle packethandle;
 #define UIP_DS6_NBR_PACKET_LIFETIME CLOCK_SECOND * 4
-#endif                          /*UIP_CONF_QUEUE_PKT */
+#endif /*UIP_CONF_QUEUE_PKT */
+#if UIP_CONF_DS6_INTERFACES_NUMBER > 1
+  uint8_t netif_idx;
+#endif /* UIP_CONF_DS6_INTERFACES_NUMBER > 1 */
 } uip_ds6_nbr_t;
 
 void uip_ds6_neighbors_init(void);
